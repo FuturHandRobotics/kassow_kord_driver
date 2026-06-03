@@ -55,6 +55,8 @@ kassow_joint_trajectory_controller:
       - velocity
       - acceleration
 
+    allow_nonzero_velocity_at_trajectory_end: true # patch for servo
+
     state_publish_rate: 50.0 # Defaults to 50
     action_monitor_rate: 20.0 # Defaults to 20
 
