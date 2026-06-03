@@ -3,16 +3,14 @@
 
   <xacro:macro name="kassow_kord_srdf" params="prefix hand_type hand_srdf_file tip_link='end_effector'">
 
-    <xacro:if value="${hand_type == 'none'}"> 
-      <group name="${prefix}_manipulator">
-        <chain base_link="${prefix}_base" tip_link="${prefix}_${tip_link}"/>
-      </group>
-    </xacro:if>
-    <xacro:unless value="${hand_type == 'none'}">
-      <group name="${prefix}_manipulator">
-        <chain base_link="${prefix}_base" tip_link="${prefix}_grasp"/>
-      </group>
-    </xacro:unless>
+    <!-- If no hand is mounted, use the requested arm tip.
+         If a hand is mounted, plan to the standardized grasp frame. -->
+    <xacro:property name="manipulator_tip"
+                    value="${prefix + '_' + (tip_link if hand_type == 'none' else 'grasp')}"/>
+
+    <group name="${prefix}_manipulator">
+      <chain base_link="${prefix}_base" tip_link="${manipulator_tip}"/>
+    </group>
 
     <disable_collisions link1="${prefix}_base" link2="${prefix}_link1" reason="Adjacent" />
     <disable_collisions link1="${prefix}_link1" link2="${prefix}_linkJ2" reason="Adjacent" />
