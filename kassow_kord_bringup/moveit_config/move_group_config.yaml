@@ -1,12 +1,13 @@
 
 /**:
   ros__parameters:
-    planning_pipelines: ["ompl", "pilz"]
+    planning_pipelines: ["ompl", "pilz", "stomp", "taskspace_birrt"]
     capabilities: >-
         move_group/MoveGroupExecuteTrajectoryAction
         pilz_industrial_motion_planner/MoveGroupSequenceAction
         pilz_industrial_motion_planner/MoveGroupSequenceService
         move_group/TfPublisher
+        move_group/ExecuteTaskSolutionCapability
     # Trajectory execution manager parameters
     allow_trajectory_execution: true
     moveit_manage_controllers: false

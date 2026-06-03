@@ -1,6 +1,9 @@
 /**:
   ros__parameters:
     moveit_simple_controller_manager:
+      # Hand controller (hand_trajectory_controller) is injected at launch time
+      # from futur_hand_description/hands/<hand_type>/config/moveit_controllers.yaml
+      # with prefix applied. Only arm controllers are defined here.
       controller_names:
         - joint_trajectory_controller
         - kassow_joint_trajectory_controller
