@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <robot name="kassow_kord" xmlns:xacro="http://wiki.ros.org/xacro">
 
-  <xacro:macro name="kassow_kord_srdf" params="prefix tip_link='end_effector'">
+  <xacro:macro name="kassow_kord_srdf" params="prefix hand_type hand_srdf_file tip_link='end_effector'">
 
-    <group name="${prefix}_manipulator">
+    <xacro:if value="${hand_type == 'none'}"> 
+      <group name="${prefix}_manipulator">
         <chain base_link="${prefix}_base" tip_link="${prefix}_${tip_link}"/>
-    </group>
+      </group>
+    </xacro:if>
+    <xacro:unless value="${hand_type == 'none'}">
+      <group name="${prefix}_manipulator">
+        <chain base_link="${prefix}_base" tip_link="${prefix}_grasp"/>
+      </group>
+    </xacro:unless>
 
     <disable_collisions link1="${prefix}_base" link2="${prefix}_link1" reason="Adjacent" />
     <disable_collisions link1="${prefix}_link1" link2="${prefix}_linkJ2" reason="Adjacent" />
@@ -13,12 +20,19 @@
     <disable_collisions link1="${prefix}_linkJ2" link2="${prefix}_link2" reason="Adjacent" />
     <disable_collisions link1="${prefix}_link2" link2="${prefix}_link3" reason="Adjacent" />
     <disable_collisions link1="${prefix}_link3" link2="${prefix}_linkJ4" reason="Adjacent" />
+    <disable_collisions link1="${prefix}_link3" link2="${prefix}_link4" reason="Adjacent" />  <!-- patched -->
     <disable_collisions link1="${prefix}_linkJ4" link2="${prefix}_link4" reason="Adjacent" />
     <disable_collisions link1="${prefix}_link4" link2="${prefix}_link5" reason="Adjacent" />
     <disable_collisions link1="${prefix}_link5" link2="${prefix}_linkJ6" reason="Adjacent" />
     <disable_collisions link1="${prefix}_link5" link2="${prefix}_link6" reason="Adjacent" />
     <disable_collisions link1="${prefix}_linkJ6" link2="${prefix}_link6" reason="Adjacent" />
     <disable_collisions link1="${prefix}_link6" link2="${prefix}_end_effector" reason="Adjacent" />
+
+    <xacro:unless value="${hand_type == 'none'}">
+      <disable_collisions link1="${prefix}_end_effector" link2="${prefix}_hand_link" reason="Adjacent"/>
+      <xacro:include filename="$(arg hand_srdf_file)"/>
+      <xacro:hand_collisions_srdf prefix="${prefix}"/>
+    </xacro:unless>
 
   </xacro:macro>
 
