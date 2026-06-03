@@ -1,0 +1,475 @@
+<?xml version="1.0" ?>
+<robot name="kr2_robot_a810" model="a810" model-revision="051020-0" mechanical-revision="5" features="TIO" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="kr810_description" params="prefix parent *origin">
+
+  <!-- globals -->
+  <xacro:property name="joints_damping" value="0.1" />
+
+  <!-- all dimensions should be input as measured in the drawing in mm and
+       converted to real dimensions by multiplying with the scale property -->
+  <xacro:property name="scale" value="0.001" />
+
+  <!-- <xacro:property name="pi" value="3.14159265359" /> -->
+  <xacro:property name="pi_per_deg" value="${pi / 180.0}" />
+
+  <xacro:property name="mass_multiplier" value="1.0" />
+
+  <xacro:macro name="cylinder_inertia" params="mass radius length">
+      <inertia ixx="0.003"
+               ixy="0.0"
+               ixz="0.0"
+               iyy="0.003"
+               iyz="0.0"
+               izz="0.003"/>
+  </xacro:macro>
+
+  <xacro:macro name="visual_and_collision" params="xyz material rpy *geometry">
+      <visual>
+        <origin rpy="${rpy}" xyz="${xyz}" />
+        <geometry>
+          <xacro:insert_block name="geometry" />
+        </geometry>
+        <material name="${material}" />
+      </visual>
+      <collision>
+        <origin rpy="${rpy}" xyz="${xyz}" />
+        <geometry>
+          <xacro:insert_block name="geometry" />
+        </geometry>
+      </collision>
+  </xacro:macro>
+
+  <xacro:macro name="visual_and_collision_mesh" params="xyz rpy color visual_mesh_file collision_mesh_file scale">
+    <visual>
+      <origin rpy="${rpy}" xyz="${xyz}" />
+      <geometry>
+        <mesh filename="${visual_mesh_file}" scale="${scale}"/>
+      </geometry>
+      <material name="">
+        <color rgba="${color}" />
+      </material>
+    </visual>
+    <collision>
+      <origin rpy="${rpy}" xyz="${xyz}" />
+      <geometry>
+        <mesh filename="${collision_mesh_file}" scale="${scale}"/>
+      </geometry>
+    </collision>
+  </xacro:macro>
+
+  <link name="${prefix}_base">
+    <xacro:property name="base_outer_radius" value="${ 80 * scale}" />
+    <xacro:property name="base_inner_radius" value="${ 60 * scale}" />
+    <xacro:property name="base_outer_height" value="${ 20 * scale}" />
+    <xacro:property name="base_inner_height" value="${ 15 * scale}" />
+
+    <xacro:property name="base_mass"         value="0.6" />
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="${base_mass*mass_multiplier}"/>
+      <xacro:cylinder_inertia mass="${base_mass}"
+                              radius="${base_outer_radius}"
+                              length="${base_inner_height+base_outer_height}" />
+    </inertial>
+
+    <xacro:visual_and_collision_mesh
+      xyz="0 0 0"
+      rpy="0 0 0"
+      color="0.2 0.2 0.2 1"
+      visual_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Base.stl"
+      collision_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Base_collision.stl"
+      scale="0.001 0.001 0.001"/>
+  </link>
+
+  <link name="${prefix}_link1">
+    <xacro:property name="link1_radius" value="${ 60 * scale}" />
+    <xacro:property name="link1_length" value="${ 308.7 * scale - 35 * scale}" />
+    <xacro:property name="link1_hinge_length"  value="${  130   * scale}"   />
+    <xacro:property name="link1_hinge_radius"  value="${  57.5 * scale}" />
+
+    <xacro:property name="link1_mass"   value="4.58" />
+
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 ${link1_length/2}"/>
+      <mass value="${link1_mass*mass_multiplier}"/>
+      <xacro:cylinder_inertia mass="${link1_mass}"
+                              radius="${link1_radius}"
+                              length="${link1_length}"/>
+    </inertial>
+
+    <xacro:visual_and_collision_mesh
+      xyz="0 0 0.169"
+      rpy="0 0 0"
+      color="0.2 0.2 0.2 1"
+      visual_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Link2.stl"
+      collision_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Link2_collision.stl"
+      scale="0.001 0.001 0.001"/>
+  </link>
+
+  <link name="${prefix}_linkJ2">
+    <xacro:property name="cylinderJ2_radius"   value="${15 * scale}"   />
+    <xacro:property name="cylinderJ2_height"   value="${120 * scale}"   />
+    <xacro:property name="linkJ2_mass"         value="6.1"   />
+
+    <xacro:visual_and_collision rpy="${pi/2} 0 0"
+                                xyz="0 ${-10 * scale} 0"
+                                material="orange">
+      <cylinder length="${cylinderJ2_height * 1.25}" radius="${cylinderJ2_radius}"/>
+    </xacro:visual_and_collision>
+
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="${linkJ2_mass*mass_multiplier}"/>
+      <xacro:cylinder_inertia mass="${linkJ2_mass}"
+                              radius="${cylinderJ2_radius}"
+                              length="${cylinderJ2_height}" />
+    </inertial>
+  </link>
+
+  <link name="${prefix}_link2">
+    <xacro:property name="link2_radius"   value="${ 45.0 * scale}"   />
+    <xacro:property name="link2_length"   value="${ 274.0 * scale}"   />
+
+    <xacro:property name="link2_mass"     value="0.43"   />
+
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 ${ 175.0 * scale }"/>
+      <mass value="${link2_mass*mass_multiplier}"/>
+      <xacro:cylinder_inertia mass="${link2_mass}"
+                              radius="${link2_radius}"
+                              length="${link2_length}" />
+    </inertial>
+
+    <xacro:visual_and_collision_mesh
+      xyz="0.049 0 0"
+      rpy="-${pi/2} 0 -${pi/2}"
+      color="0.2 0.2 0.2 1"
+      visual_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Link3.stl"
+      collision_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Link3_collision.stl"
+      scale="0.001 0.001 0.001"/>
+  </link>
+
+  <link name="${prefix}_link3">
+    <xacro:property name="link3_radius"        value="${  45.0 * scale}" />
+    <xacro:property name="link3_length"        value="${ 142.9 * scale}" />
+    <xacro:property name="link3_hinge_length"  value="${ 120.0 * scale}" />
+    <xacro:property name="link3_hinge_radius"  value="${  45.0 * scale}" />
+    <xacro:property name="link3_hinge_yoffset" value="${   6.5 * scale}" />
+
+    <xacro:property name="link3_mass"     value="2.9" />
+
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="${link3_mass*mass_multiplier}"/>
+      <xacro:cylinder_inertia mass="${link3_mass}"
+                              radius="${link3_radius}"
+                              length="${link3_length}" />
+    </inertial>
+
+    <xacro:visual_and_collision_mesh
+      xyz="-0.05 -0.0 0.315"
+      rpy="${pi/2} 0 -${pi/2}"
+      color="0.2 0.2 0.2 1"
+      visual_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Link4.stl"
+      collision_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Link4_collision.stl"
+      scale="0.001 0.001 0.001"/>
+  </link>
+
+  <link name="${prefix}_linkJ4">
+    <xacro:property name="cylinderJ4_radius"   value="${15.0 * scale}"   />
+    <xacro:property name="cylinderJ4_height"   value="${100 * scale}"   />
+    <xacro:property name="linkJ4_mass"         value="3.8"   />
+
+    <xacro:visual_and_collision rpy="${pi/2} 0 0"
+                                xyz="0 ${13 * scale} 0"
+                                material="orange">
+      <cylinder length="${cylinderJ4_height * 1.29}" radius="${cylinderJ4_radius}"/>
+    </xacro:visual_and_collision>
+
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 ${6.5 * scale} 0"/>
+      <mass value="${linkJ4_mass*mass_multiplier}"/>
+      <xacro:cylinder_inertia mass="${linkJ4_mass}"
+                              radius="${cylinderJ4_radius}"
+                              length="${cylinderJ4_height}" />
+    </inertial>
+  </link>
+
+  <link name="${prefix}_link4">
+    <xacro:property name="link4_radius"   value="${  40.0 * scale}" />
+    <xacro:property name="link4_length"   value="${ 271.0 * scale}" />
+
+    <xacro:property name="link4_mass"     value="0.33" />
+
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 ${ 168.0 * scale}"/>
+      <mass value="${link4_mass*mass_multiplier}"/>
+      <xacro:cylinder_inertia mass="${link4_mass}"
+                              radius="${link4_radius}"
+                              length="${link4_length}" />
+    </inertial>
+
+    <xacro:visual_and_collision_mesh
+      xyz="0.04 0.0005 0.0"
+      rpy="-${pi/2} 0 ${pi/2}"
+      color="0.2 0.2 0.2 1"
+      visual_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Link5.stl"
+      collision_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Link5_collision.stl"
+      scale="0.001 0.001 0.001"/>
+  </link>
+
+  <link name="${prefix}_link5">
+    <xacro:property name="link5_radius"   value="${  40.0 * scale}" />
+    <xacro:property name="link5_length"   value="${ 103.5 * scale}" />
+
+    <xacro:property name="link5_mass"     value="1.7" />
+
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="${link5_mass*mass_multiplier}"/>
+      <xacro:cylinder_inertia mass="${link5_mass}"
+                              radius="${link5_radius}"
+                              length="${link5_length}" />
+    </inertial>
+
+    <xacro:visual_and_collision_mesh
+      xyz="0.0 0.002 0.1035"
+      rpy="0 0 -${pi/2}"
+      color="0.2 0.2 0.2 1"
+      visual_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Link6.stl"
+      collision_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Link6_collision.stl"
+      scale="0.001 0.001 0.001"/>
+  </link>
+
+  <link name="${prefix}_linkJ6">
+    <xacro:property name="cylinderJ6_radius"   value="${ 15.0 * scale}"   />
+    <xacro:property name="cylinderJ6_height"   value="${ 110.0 * scale}"  />
+    <xacro:property name="linkJ6_mass"         value="1.8"   />
+
+    <xacro:visual_and_collision rpy="${pi/2} 0 0"
+                                xyz="0 ${10 * scale} 0"
+                                material="orange">
+      <cylinder length="${cylinderJ6_height * 1.9}" radius="${cylinderJ6_radius}"/>
+    </xacro:visual_and_collision>
+
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 ${4.0 * scale} 0"/>
+      <mass value="${linkJ6_mass*mass_multiplier}"/>
+      <xacro:cylinder_inertia mass="${linkJ6_mass}"
+                              radius="${cylinderJ6_radius}"
+                              length="${cylinderJ6_height}" />
+    </inertial>
+  </link>
+
+  <link name="${prefix}_link6">
+    <xacro:property name="link6_radius"   value="${ 35.0 * scale}" />
+    <xacro:property name="link6_length"   value="${ 66.5 * scale}" />
+    <xacro:property name="link6_mass"     value="1.8" />
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 ${4.0 * scale}"/>
+      <mass value="${link6_mass*mass_multiplier}"/>
+      <xacro:cylinder_inertia mass="${link6_mass}"
+                              radius="${link6_radius}"
+                              length="${link6_length}" />
+    </inertial>
+
+    <xacro:visual_and_collision_mesh
+      xyz="0.0 0.0 0.0"
+      rpy="0 0 0"
+      color="0.2 0.2 0.2 1"
+      visual_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Link7.stl"
+      collision_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_Link7_collision.stl"
+      scale="0.001 0.001 0.001"/>
+  </link>
+
+  <link name="${prefix}_end_effector">
+    <xacro:property name="end_effector_outer_radius" value="${ 35.5 * scale}" />
+    <xacro:property name="end_effector_outer_length" value="${ 5.0 * scale}" />
+    <xacro:property name="end_effector_inner_radius" value="${ 22.5 * scale}" />
+    <xacro:property name="end_effector_inner_length" value="${ 5.0   * scale}" />
+
+    <xacro:property name="end_effector_mass" value="0.56"/>
+
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 ${-19.7 * scale}"/>
+      <mass value="${end_effector_mass*mass_multiplier}"/>
+      <xacro:cylinder_inertia mass="${end_effector_mass}"
+                              radius="${end_effector_outer_radius}"
+                              length="${end_effector_outer_length + end_effector_inner_length}" />
+    </inertial>
+
+    <xacro:visual_and_collision_mesh
+      xyz="0.0 -0.0 0.0"
+      rpy="0 0 0"
+      color="0.8 0.8 0.8 1"
+      visual_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_ToolIO.stl"
+      collision_mesh_file="package://kassow_kord_description/kr810/meshes/a810/a810_ToolIO_collision.stl"
+      scale="0.001 0.001 0.001"/>
+  </link>
+
+  <!-- joints -->
+  <joint name="${prefix}_parent_link" type="fixed">
+    <xacro:insert_block name="origin" />
+    <parent link="${parent}"/>
+    <child link="${prefix}_base"/>
+  </joint>
+  <xacro:property name="joint0_xoffset" value="${ 0 }" />
+  <xacro:property name="joint0_yoffset" value="${ 0 }" />
+  <xacro:property name="joint0_zoffset" value="${ 0.035 }" />
+  <xacro:property name="joint0_roll" value="${ 0 }" />
+  <xacro:property name="joint0_pitch" value="${ 0 }" />
+  <xacro:property name="joint0_yaw" value="${ 0 }" />
+
+  <joint name="${prefix}_joint_1" type="revolute">
+    <parent link="${prefix}_base"/>
+    <child link="${prefix}_link1"/>
+    <origin rpy="${joint0_roll} ${joint0_pitch} ${joint0_yaw}" xyz="${joint0_xoffset} ${joint0_yoffset} ${joint0_zoffset}"/>
+    <axis xyz="0 0 1"/>
+
+    <dynamics damping="${joints_damping}"/>
+    <limit effort="60" velocity="${radians(225)}" lower="${-2*pi}" upper="${2*pi}"/>
+  </joint>
+
+  <xacro:property name="joint1_xoffset"  value="${ 0.05009487569 }" />
+  <xacro:property name="joint1_yoffset"  value="${ 0 }" />
+  <xacro:property name="joint1_zoffset"  value="${ 0.2737 }" />
+  <xacro:property name="joint1_roll" value="${ -0.0003463998437 }" />
+  <xacro:property name="joint1_pitch" value="${ -0.002930734131 }" />
+  <xacro:property name="joint1_yaw" value="${ 1.015205885e-06 }" />
+
+  <joint name="${prefix}_joint_2" type="revolute">
+    <parent link="${prefix}_link1"/>
+    <child link="${prefix}_linkJ2"/>
+    <origin rpy="${joint1_roll} ${joint1_pitch} ${joint1_yaw}" xyz="${joint1_xoffset} ${joint1_yoffset} ${joint1_zoffset}"/>
+    <axis xyz="0 1 0"/>
+
+    <dynamics damping="${joints_damping}"/>
+    <limit effort="60" velocity="${radians(225)}" lower="-${radians(70.0)}" upper="${pi}"/>
+  </joint>
+
+  <xacro:property name="jointPL2_xoffset"  value="${ -0.050466289 }" />
+  <xacro:property name="jointPL2_yoffset"  value="${ -0.08644394979 }" />
+  <xacro:property name="jointPL2_zoffset" value="${ 0 }" />
+  <xacro:property name="jointPL2_roll" value="${ 0.0005086883903 }" />
+  <xacro:property name="jointPL2_pitch" value="${ 2.470811192e-08 }" />
+  <xacro:property name="jointPL2_yaw" value="${ -4.857219127e-05 }" />
+
+  <joint name="${prefix}_jointPL2" type="fixed">
+    <parent link="${prefix}_linkJ2"/>
+    <child link="${prefix}_link2"/>
+    <origin rpy="${jointPL2_roll} ${jointPL2_pitch} ${jointPL2_yaw}" xyz="${jointPL2_xoffset} ${jointPL2_yoffset} ${jointPL2_zoffset}"/>
+  </joint>
+  <xacro:property name="joint2_xoffset" value="${ 0 }" />
+  <xacro:property name="joint2_yoffset" value="${ 0 }" />
+  <xacro:property name="joint2_zoffset" value="${ 0.2796 }" />
+  <xacro:property name="joint2_roll" value="${ 0 }" />
+  <xacro:property name="joint2_pitch" value="${ 0 }" />
+  <xacro:property name="joint2_yaw" value="${ 0 }" />
+
+  <joint name="${prefix}_joint_3" type="revolute">
+    <parent link="${prefix}_link2"/>
+    <child link="${prefix}_link3"/>
+    <origin rpy="${joint2_roll} ${joint2_pitch} ${joint2_yaw}" xyz="${joint2_xoffset} ${joint2_yoffset} ${joint2_zoffset}"/>
+    <axis xyz="0 0 1"/>
+
+    <dynamics damping="${joints_damping}"/>
+    <limit effort="40" velocity="${radians(225)}" lower="${-2*pi}" upper="${2*pi}"/>
+  </joint>
+
+  <xacro:property name="joint3_xoffset"  value="${ 0.04023935363 }" />
+  <xacro:property name="joint3_yoffset"  value="${ 0 }" />
+  <xacro:property name="joint3_zoffset"  value="${ 0.1414937625 }" />
+  <xacro:property name="joint3_roll" value="${ 0.0005607847124 }" />
+  <xacro:property name="joint3_pitch" value="${ -0.001709196448 }" />
+  <xacro:property name="joint3_yaw" value="${ -9.584913389e-07 }" />
+
+  <joint name="${prefix}_joint_4" type="revolute">
+    <parent link="${prefix}_link3"/>
+    <child link="${prefix}_linkJ4"/>
+    <origin rpy="${joint3_roll} ${joint3_pitch} ${joint3_yaw}" xyz="${joint3_xoffset} ${joint3_yoffset} ${joint3_zoffset}"/>
+    <axis xyz="0 1 0"/>
+
+    <dynamics damping="${joints_damping}"/>
+    <limit effort="40" velocity="${radians(225)}" lower="-${radians(70.0)}" upper="${pi}"/>
+  </joint>
+
+  <xacro:property name="jointPL4_xoffset"  value="${ -0.03987403862 }" />
+  <xacro:property name="jointPL4_yoffset"  value="${ 0.08506701356 }" />
+  <xacro:property name="jointPL4_zoffset"  value="${ 0 }" />
+  <xacro:property name="jointPL4_roll" value="${ -0.0004499666393 }" />
+  <xacro:property name="jointPL4_pitch" value="${ -6.062348532e-08 }" />
+  <xacro:property name="jointPL4_yaw" value="${ -0.0001347288353 }" />
+
+  <joint name="${prefix}_jointPL4" type="fixed">
+    <parent link="${prefix}_linkJ4"/>
+    <child link="${prefix}_link4"/>
+    <origin rpy="${jointPL4_roll} ${jointPL4_pitch} ${jointPL4_yaw}" xyz="${jointPL4_xoffset} ${jointPL4_yoffset} ${jointPL4_zoffset}"/>
+  </joint>
+  <xacro:property name="joint4_xoffset" value="${ 0 }" />
+  <xacro:property name="joint4_yoffset" value="${ 0 }" />
+  <xacro:property name="joint4_zoffset" value="${ 0.274 }" />
+  <xacro:property name="joint4_roll" value="${ 0 }" />
+  <xacro:property name="joint4_pitch" value="${ 0 }" />
+  <xacro:property name="joint4_yaw" value="${ 0 }" />
+
+  <joint name="${prefix}_joint_5" type="revolute">
+    <parent link="${prefix}_link4"/>
+    <child link="${prefix}_link5"/>
+    <origin rpy="${joint4_roll} ${joint4_pitch} ${joint4_yaw}" xyz="${joint4_xoffset} ${joint4_yoffset} ${joint4_zoffset}"/>
+    <axis xyz="0 0 1"/>
+
+    <dynamics damping="${joints_damping}"/>
+    <limit effort="20" velocity="${radians(225)}" lower="${-2*pi}" upper="${2*pi}"/>
+  </joint>
+
+  <xacro:property name="joint5_zoffset"  value="${ 0.1039665777 }" />
+  <xacro:property name="joint5_xoffset" value="${ -2.697296441e-05 }" />
+  <xacro:property name="joint5_yoffset" value="${ 0 }" />
+  <xacro:property name="joint5_roll" value="${ 0.0008279271424 }" />
+  <xacro:property name="joint5_pitch" value="${ 0.00195151128 }" />
+  <xacro:property name="joint5_yaw" value="${ 1.615709527e-06 }" />
+
+  <joint name="${prefix}_joint_6" type="revolute">
+    <parent link="${prefix}_link5"/>
+    <child link="${prefix}_linkJ6"/>
+    <origin rpy="${joint5_roll} ${joint5_pitch} ${joint5_yaw}" xyz="${joint5_xoffset} ${joint5_yoffset} ${joint5_zoffset}"/>
+    <axis xyz="0 1 0"/>
+
+    <dynamics damping="${joints_damping}"/>
+    <limit effort="20" velocity="${radians(225)}" lower="${-2*pi}" upper="${2*pi}"/>
+  </joint>
+
+  <xacro:property name="jointPL6_yoffset"  value="${ 0.1117164627 }" />
+  <xacro:property name="jointPL6_xoffset" value="${ -1.67991966e-05 }" />
+  <xacro:property name="jointPL6_zoffset" value="${ 0 }" />
+  <xacro:property name="jointPL6_roll" value="${ -0.000504847616 }" />
+  <xacro:property name="jointPL6_pitch" value="${ 0 }" />
+  <xacro:property name="jointPL6_yaw" value="${ 0 }" />
+  <joint name="${prefix}_jointPL6" type="fixed">
+    <parent link="${prefix}_linkJ6"/>
+    <child link="${prefix}_link6"/>
+    <origin rpy="${jointPL6_roll} ${jointPL6_pitch} ${jointPL6_yaw}" xyz="${jointPL6_xoffset} ${jointPL6_yoffset} ${jointPL6_zoffset}"/>
+  </joint>
+
+  <xacro:property name="joint6_zoffset"  value="${ 0.108 }" />
+  <xacro:property name="joint6_xoffset" value="${ 0 }" />
+  <xacro:property name="joint6_yoffset" value="${ 0 }" />
+  <xacro:property name="joint6_roll" value="${ 0 }" />
+  <xacro:property name="joint6_pitch" value="${ 0 }" />
+  <xacro:property name="joint6_yaw" value="${ 0 }" />
+
+  <joint name="${prefix}_joint_7" type="revolute">
+    <parent link="${prefix}_link6"/>
+    <child link="${prefix}_end_effector"/>
+    <origin rpy="${joint6_roll} ${joint6_pitch} ${joint6_yaw}" xyz="${joint6_xoffset} ${joint6_yoffset} ${joint6_zoffset}"/>
+    <axis xyz="0 0 1"/>
+
+    <dynamics damping="${joints_damping}"/>
+
+    <limit effort="20" velocity="${radians(225)}" lower="${-2*pi}" upper="${2*pi}"/>
+  </joint>
+
+  </xacro:macro>
+
+</robot>

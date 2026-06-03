@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<robot name="kr810" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find kassow_kord_description)/kr810/urdf/kr810_description_nominal.urdf.xacro"/>
+
+  <link name="world"/>
+
+  <xacro:kr810_description prefix="kr" parent="world">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </xacro:kr810_description>
+
+</robot>

@@ -1,0 +1,70 @@
+result:
+  input_mesh_path: /root/FuturHub/install/kassow_kord_description/share/kassow_kord_description/kr810/meshes/a810/a810_Link2.stl
+  output_mesh_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Link2_collision.stl
+  report_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Link2_collision.report.yaml
+  target_vertices: 1000
+  preprocess_mode: none
+  reference_vertices: 31433
+  reference_triangles: 62858
+  simplified_vertices: 1000
+  simplified_triangles: 1992
+  overlap_percent: 98.81511953853335
+  overlap_metric: approx_surface_overlap
+  symmetric_surface_distance_mean: 2.821817405383798
+  symmetric_surface_distance_rms: 3.1981850922681025
+  chosen_target_triangles: 1993
+original_mesh_stats:
+  vertices: 31433
+  triangles: 62858
+  watertight: true
+  is_volume: false
+  euler_number: 4
+  body_count: 2
+reference_mesh_stats:
+  vertices: 31433
+  triangles: 62858
+  watertight: true
+  is_volume: false
+  euler_number: 4
+  body_count: 2
+simplified_mesh_stats:
+  vertices: 1000
+  triangles: 1992
+  watertight: true
+  is_volume: true
+  euler_number: 4
+  body_count: 2
+original_bounds:
+  extents:
+  - 171.49197387695312
+  - 123.99905395507812
+  - 167.48277282714844
+  volume: null
+  watertight: true
+reference_bounds:
+  extents:
+  - 171.49197387695312
+  - 123.99905395507812
+  - 167.48277282714844
+  volume: null
+  watertight: true
+simplified_bounds:
+  extents:
+  - 171.49707376087218
+  - 124.06730720440322
+  - 167.48387193312317
+  volume: 1690036.901541952
+  watertight: true
+preprocess_config:
+  mode: none
+  voxel_pitch: 0.002
+  fill_enclosed: true
+  keep_largest_component: true
+  export_preprocessed_mesh: true
+  export_suffix: _preprocessed
+decimation_config:
+  target_vertices: 1000
+  search_steps: 18
+  surface_sample_count: 3000
+  post_clean: true
+preprocessed_mesh_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Link2_collision_preprocessed.stl
