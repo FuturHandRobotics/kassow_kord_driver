@@ -47,6 +47,9 @@
   <arg name="stomp_planning_file_path"
        default="$(find-pkg-share $(var configuration_package))/moveit_config/stomp_planning.yaml"
        description="YAML file with the Pilz planning configuration."/>
+  <arg name="taskspace_birrt_planning_file_path"
+       default="$(find-pkg-share $(var configuration_package))/moveit_config/taskspace_birrt_planning.yaml"
+       description="YAML file with the TaskSpaceBiRRT planning configuration."/>
   <arg name="pilz_cartesian_limits_file_path"
        default="$(find-pkg-share $(var configuration_package))/moveit_config/pilz_cartesian_limits.yaml"
        description="YAML file with the Pilz cartesian limits configuration."/>
@@ -78,6 +81,7 @@
     <param from="$(var ompl_planning_file_path)"/>
     <param from="$(var pilz_planning_file_path)"/>
     <param from="$(var stomp_planning_file_path)"/>
+    <param from="$(var taskspace_birrt_planning_file_path)"/>
     <param from="$(var pilz_cartesian_limits_file_path)"/>
     <param from="$(var joint_limits_file_path)"/>
     <param from="$(var moveit_controllers_file_path)"/>

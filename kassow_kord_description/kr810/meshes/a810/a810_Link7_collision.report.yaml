@@ -1,0 +1,70 @@
+result:
+  input_mesh_path: /root/FuturHub/install/kassow_kord_description/share/kassow_kord_description/kr810/meshes/a810/a810_Link7.stl
+  output_mesh_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Link7_collision.stl
+  report_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Link7_collision.report.yaml
+  target_vertices: 1000
+  preprocess_mode: none
+  reference_vertices: 9978
+  reference_triangles: 20196
+  simplified_vertices: 1000
+  simplified_triangles: 2240
+  overlap_percent: 98.74602784242289
+  overlap_metric: approx_surface_overlap
+  symmetric_surface_distance_mean: 2.1332286870464254
+  symmetric_surface_distance_rms: 2.4192496330519817
+  chosen_target_triangles: 2240
+original_mesh_stats:
+  vertices: 9978
+  triangles: 20196
+  watertight: false
+  is_volume: false
+  euler_number: 4
+  body_count: 4
+reference_mesh_stats:
+  vertices: 9978
+  triangles: 20196
+  watertight: false
+  is_volume: false
+  euler_number: 4
+  body_count: 4
+simplified_mesh_stats:
+  vertices: 1000
+  triangles: 2240
+  watertight: false
+  is_volume: false
+  euler_number: 4
+  body_count: 4
+original_bounds:
+  extents:
+  - 80.0
+  - 86.49999237060547
+  - 152.72802352905273
+  volume: null
+  watertight: false
+reference_bounds:
+  extents:
+  - 80.0
+  - 86.49999237060547
+  - 152.72802352905273
+  volume: null
+  watertight: false
+simplified_bounds:
+  extents:
+  - 80.06597353438127
+  - 86.5000247322046
+  - 152.73498303134375
+  volume: null
+  watertight: false
+preprocess_config:
+  mode: none
+  voxel_pitch: 0.01
+  fill_enclosed: true
+  keep_largest_component: true
+  export_preprocessed_mesh: true
+  export_suffix: _preprocessed
+decimation_config:
+  target_vertices: 1000
+  search_steps: 18
+  surface_sample_count: 3000
+  post_clean: false
+preprocessed_mesh_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Link7_collision_preprocessed.stl

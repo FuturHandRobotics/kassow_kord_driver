@@ -1,0 +1,70 @@
+result:
+  input_mesh_path: /root/FuturHub/install/kassow_kord_description/share/kassow_kord_description/kr810/meshes/a810/a810_Link4.stl
+  output_mesh_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Link4_collision.stl
+  report_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Link4_collision.report.yaml
+  target_vertices: 1000
+  preprocess_mode: none
+  reference_vertices: 29068
+  reference_triangles: 58378
+  simplified_vertices: 1000
+  simplified_triangles: 2242
+  overlap_percent: 98.81815403386291
+  overlap_metric: approx_surface_overlap
+  symmetric_surface_distance_mean: 2.899854983176273
+  symmetric_surface_distance_rms: 3.3064734984703783
+  chosen_target_triangles: 2242
+original_mesh_stats:
+  vertices: 29068
+  triangles: 58378
+  watertight: false
+  is_volume: false
+  euler_number: 8
+  body_count: 25
+reference_mesh_stats:
+  vertices: 29068
+  triangles: 58378
+  watertight: false
+  is_volume: false
+  euler_number: 8
+  body_count: 25
+simplified_mesh_stats:
+  vertices: 1000
+  triangles: 2242
+  watertight: false
+  is_volume: false
+  euler_number: 8
+  body_count: 25
+original_bounds:
+  extents:
+  - 98.07677459716797
+  - 222.69971466064453
+  - 137.99008178710938
+  volume: null
+  watertight: false
+reference_bounds:
+  extents:
+  - 98.07677459716797
+  - 222.69971466064453
+  - 137.99008178710938
+  volume: null
+  watertight: false
+simplified_bounds:
+  extents:
+  - 98.02325753187147
+  - 222.7280895309196
+  - 138.04340908829374
+  volume: null
+  watertight: false
+preprocess_config:
+  mode: none
+  voxel_pitch: 0.01
+  fill_enclosed: true
+  keep_largest_component: true
+  export_preprocessed_mesh: true
+  export_suffix: _preprocessed
+decimation_config:
+  target_vertices: 1000
+  search_steps: 18
+  surface_sample_count: 3000
+  post_clean: false
+preprocessed_mesh_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Link4_collision_preprocessed.stl

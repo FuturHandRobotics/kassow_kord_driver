@@ -23,10 +23,18 @@
 
   <arg name="start_rviz" default="true" description="Launch RViz visualization?"/>
 
+  <arg name="hand_type" default="minimal" description="Which hand/tool xacro to attach."/>
+  <arg name="robot_serial_number" default="0" description="Last two digits of the serial number of the robot."/>
+  <arg name="nominal" default="false" description="Whether to use the nominal robot description."/>
+
   <let name="prefix" value=""/>
   <let name="controllers_file_path" value="$(find-pkg-share $(var configuration_package))/config/kassow_kord_controllers.yaml"/>
 
-  <include file="$(find-pkg-share $(var configuration_package))/launch/kassow_kord_description.launch.xml"/>
+  <include file="$(find-pkg-share $(var configuration_package))/launch/kassow_kord_description.launch.xml">
+    <arg name="hand_type" value="$(var hand_type)"/>
+    <arg name="robot_serial_number" value="$(var robot_serial_number)"/>
+    <arg name="nominal" value="$(var nominal)"/>
+  </include>
 
   <node pkg="controller_manager" exec="ros2_control_node" name="b_controlled_box_cm" output="both">
     <param name="update_rate" value="250"/>

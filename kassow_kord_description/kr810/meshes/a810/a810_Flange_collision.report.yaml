@@ -1,0 +1,70 @@
+result:
+  input_mesh_path: /root/FuturHub/install/kassow_kord_description/share/kassow_kord_description/kr810/meshes/a810/a810_Flange.stl
+  output_mesh_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Flange_collision.stl
+  report_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Flange_collision.report.yaml
+  target_vertices: 1000
+  preprocess_mode: none
+  reference_vertices: 1744
+  reference_triangles: 3483
+  simplified_vertices: 1000
+  simplified_triangles: 1996
+  overlap_percent: 98.93124529001119
+  overlap_metric: approx_surface_overlap
+  symmetric_surface_distance_mean: 1.0827970035654708
+  symmetric_surface_distance_rms: 1.2184159013641382
+  chosen_target_triangles: 1996
+original_mesh_stats:
+  vertices: 1744
+  triangles: 3483
+  watertight: false
+  is_volume: false
+  euler_number: 1
+  body_count: 1
+reference_mesh_stats:
+  vertices: 1744
+  triangles: 3483
+  watertight: false
+  is_volume: false
+  euler_number: 1
+  body_count: 1
+simplified_mesh_stats:
+  vertices: 1000
+  triangles: 1996
+  watertight: true
+  is_volume: true
+  euler_number: 2
+  body_count: 1
+original_bounds:
+  extents:
+  - 14.0
+  - 80.0
+  - 80.0
+  volume: null
+  watertight: false
+reference_bounds:
+  extents:
+  - 14.0
+  - 80.0
+  - 80.0
+  volume: null
+  watertight: false
+simplified_bounds:
+  extents:
+  - 14.00127178704119
+  - 80.00601704419736
+  - 79.99849778770084
+  volume: 59597.985155265545
+  watertight: true
+preprocess_config:
+  mode: none
+  voxel_pitch: 0.002
+  fill_enclosed: true
+  keep_largest_component: true
+  export_preprocessed_mesh: true
+  export_suffix: _preprocessed
+decimation_config:
+  target_vertices: 1000
+  search_steps: 18
+  surface_sample_count: 3000
+  post_clean: true
+preprocessed_mesh_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Flange_collision_preprocessed.stl

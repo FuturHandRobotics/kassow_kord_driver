@@ -3,20 +3,51 @@
 
   <xacro:arg name="prefix" default="kassow"/>
   <xacro:arg name="use_mock_hardware" default="true"/>
-  <xacro:arg name="ip_address" default="10.23.23.238"/>
-  <xacro:arg name="port" default="28283"/>
+  <xacro:arg name="ip_address" default="192.168.33.2"/>
+  <xacro:arg name="port" default="7582"/>
   <xacro:arg name="session_id" default="1"/>
+  <xacro:arg name="hand_type" default="none"/>
+  <xacro:arg name="robot_serial_number" default="42"/>
+  <xacro:arg name="nominal" default="false"/>
 
-  <xacro:include filename="$(find kassow_kord_bringup)/urdf/common/inertials.xacro" />
-  <xacro:include filename="$(find kassow_kord_bringup)/urdf/common/materials.xacro" />
-  <xacro:include filename="$(find kassow_kord_description)/kr810/urdf/kr810_description.urdf.xacro"/>
+  <!-- Convert arg -> xacro property so it can be used inside ${...} -->
+  <xacro:property name="hand_type" value="$(arg hand_type)"/>
+  <xacro:property name="robot_serial_number" value="$(arg robot_serial_number)"/>
+  <xacro:property name="nominal" value="$(arg nominal)"/>
+
+  <xacro:include filename="$(find kassow_kord_bringup)/urdf/common/inertials.xacro"/>
+  <xacro:include filename="$(find kassow_kord_bringup)/urdf/common/materials.xacro"/>
+
+  <!-- KR810 description selection -->
+  <xacro:if value="${nominal}">
+    <xacro:include filename="$(find kassow_kord_description)/kr810/urdf/kr810_description_nominal.urdf.xacro"/>
+  </xacro:if>
+
+  <xacro:if value="${not nominal}">
+    <xacro:include filename="$(find kassow_kord_description)/kr810/urdf/kr810_description_patched_${robot_serial_number}.urdf.xacro"/>
+  </xacro:if>
+
   <xacro:include filename="$(find kassow_kord_bringup)/urdf/kassow_kord.ros2_control.xacro"/>
+
+  <!-- Hand include -->
+  <xacro:include filename="$(find futur_hand_description)/hands/hand_${hand_type}/urdf/hand_${hand_type}.urdf.xacro"/>
+
+  <!-- Tree -->
+
+  <!-- World link -->
 
   <link name="world"/>
 
   <xacro:kr810_description prefix="$(arg prefix)" parent="world">
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 0.785398"/>
   </xacro:kr810_description>
+
+  <xacro:if value="${hand_type != 'none'}">
+    <xacro:hand_description
+      parent_link="$(arg prefix)_end_effector"
+      prefix="$(arg prefix)"
+    />
+  </xacro:if>
 
   <xacro:kassow_kord_ros2_control
     name="$(arg prefix)"

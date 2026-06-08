@@ -1,0 +1,70 @@
+result:
+  input_mesh_path: /root/FuturHub/install/kassow_kord_description/share/kassow_kord_description/kr810/meshes/a810/a810_Base.stl
+  output_mesh_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Base_collision.stl
+  report_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Base_collision.report.yaml
+  target_vertices: 1000
+  preprocess_mode: none
+  reference_vertices: 29714
+  reference_triangles: 59732
+  simplified_vertices: 1000
+  simplified_triangles: 2304
+  overlap_percent: 98.8436342966559
+  overlap_metric: approx_surface_overlap
+  symmetric_surface_distance_mean: 3.4159220491107014
+  symmetric_surface_distance_rms: 3.8933052270545914
+  chosen_target_triangles: 2305
+original_mesh_stats:
+  vertices: 29714
+  triangles: 59732
+  watertight: false
+  is_volume: false
+  euler_number: 2
+  body_count: 46
+reference_mesh_stats:
+  vertices: 29714
+  triangles: 59732
+  watertight: false
+  is_volume: false
+  euler_number: 2
+  body_count: 46
+simplified_mesh_stats:
+  vertices: 1000
+  triangles: 2304
+  watertight: false
+  is_volume: false
+  euler_number: 2
+  body_count: 46
+original_bounds:
+  extents:
+  - 234.4415283203125
+  - 130.0
+  - 203.69999694824224
+  volume: null
+  watertight: false
+reference_bounds:
+  extents:
+  - 234.4415283203125
+  - 130.0
+  - 203.69999694824224
+  volume: null
+  watertight: false
+simplified_bounds:
+  extents:
+  - 234.25896229865816
+  - 130.01987020627703
+  - 203.70007466726062
+  volume: null
+  watertight: false
+preprocess_config:
+  mode: none
+  voxel_pitch: 0.01
+  fill_enclosed: true
+  keep_largest_component: true
+  export_preprocessed_mesh: true
+  export_suffix: _preprocessed
+decimation_config:
+  target_vertices: 1000
+  search_steps: 18
+  surface_sample_count: 3000
+  post_clean: false
+preprocessed_mesh_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Base_collision_preprocessed.stl

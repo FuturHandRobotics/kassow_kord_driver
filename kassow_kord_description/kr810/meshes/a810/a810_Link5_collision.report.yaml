@@ -1,0 +1,70 @@
+result:
+  input_mesh_path: /root/FuturHub/install/kassow_kord_description/share/kassow_kord_description/kr810/meshes/a810/a810_Link5.stl
+  output_mesh_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Link5_collision.stl
+  report_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Link5_collision.report.yaml
+  target_vertices: 1000
+  preprocess_mode: none
+  reference_vertices: 31506
+  reference_triangles: 64131
+  simplified_vertices: 1000
+  simplified_triangles: 3119
+  overlap_percent: 99.0865351237149
+  overlap_metric: approx_surface_overlap
+  symmetric_surface_distance_mean: 3.313293001664668
+  symmetric_surface_distance_rms: 3.7680823480461525
+  chosen_target_triangles: 3119
+original_mesh_stats:
+  vertices: 31506
+  triangles: 64131
+  watertight: false
+  is_volume: false
+  euler_number: 30
+  body_count: 134
+reference_mesh_stats:
+  vertices: 31506
+  triangles: 64131
+  watertight: false
+  is_volume: false
+  euler_number: 30
+  body_count: 134
+simplified_mesh_stats:
+  vertices: 1000
+  triangles: 3119
+  watertight: false
+  is_volume: false
+  euler_number: 30
+  body_count: 134
+original_bounds:
+  extents:
+  - 82.95808029174805
+  - 381.99026107788086
+  - 130.99918746948242
+  volume: null
+  watertight: false
+reference_bounds:
+  extents:
+  - 82.95808029174805
+  - 381.99026107788086
+  - 130.99918746948242
+  volume: null
+  watertight: false
+simplified_bounds:
+  extents:
+  - 83.08204669592374
+  - 382.1090730426502
+  - 131.33875426470283
+  volume: null
+  watertight: false
+preprocess_config:
+  mode: none
+  voxel_pitch: 0.01
+  fill_enclosed: true
+  keep_largest_component: true
+  export_preprocessed_mesh: true
+  export_suffix: _preprocessed
+decimation_config:
+  target_vertices: 1000
+  search_steps: 18
+  surface_sample_count: 3000
+  post_clean: false
+preprocessed_mesh_path: /root/FuturHub/install/futur_hand_description/share/futur_hand_description/meshes/kr810/a810_Link5_collision_preprocessed.stl
