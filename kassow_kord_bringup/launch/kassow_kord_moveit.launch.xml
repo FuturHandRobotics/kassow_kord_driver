@@ -70,7 +70,7 @@
   <arg name="default_planning_pipeline" default="ompl" description="Default planning pipeline for MoveIt2.">
     <choice value="ompl"/>
     <choice value="pilz"/>
-    <choice value="stomp"/>  
+    <choice value="stomp"/>
   </arg>
   <arg name="hand_srdf_file" default="" description="Absolute path to the hand collisions SRDF xacro file."/>
   <arg name="hand_joint_limits_file" default=""
