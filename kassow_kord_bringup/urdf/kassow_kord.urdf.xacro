@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="kassow_kord">
 
   <xacro:arg name="prefix" default="kassow"/>
-  <xacro:arg name="use_mock_hardware" default="true"/>
+  <xacro:arg name="use_mock" default="true"/>
   <xacro:arg name="ip_address" default="192.168.33.2"/>
   <xacro:arg name="port" default="7582"/>
   <xacro:arg name="session_id" default="1"/>
@@ -52,20 +52,11 @@
   <xacro:kassow_kord_ros2_control
     name="$(arg prefix)"
     prefix="$(arg prefix)"
-    use_mock_hardware="$(arg use_mock_hardware)"
+    use_mock_hardware="$(arg use_mock)"
     ip_address="$(arg ip_address)"
     port="$(arg port)"
     session_id="$(arg session_id)"
   />
+  <xacro:include filename="$(find futur_hand_description)/config/hand_ros2_control.xacro"/>
 
-  <!-- Hand ros2_control block — no-op macro for non-drivable hands, real block for drivable ones -->
-  <xacro:if value="${hand_type != 'none'}">
-    <xacro:include filename="$(find futur_hand_description)/hands/hand_$(arg hand_type)/urdf/hand_$(arg hand_type)_ros2_control.xacro"/>
-    <xacro:hand_ros2_control
-      name="hand"
-      prefix="$(arg prefix)"
-      use_mock="$(arg use_mock_hardware)"
-      hand_type="$(arg hand_type)"
-    />
-  </xacro:if>
 </robot>
