@@ -9,6 +9,9 @@
   <xacro:arg name="hand_type" default="none"/>
   <xacro:arg name="robot_serial_number" default="42"/>
   <xacro:arg name="nominal" default="false"/>
+  <!-- Set false when a dedicated hand controller manager is launched separately
+       so that the arm CM does not also try to claim the hand hardware. -->
+  <xacro:arg name="hand_ros2_control" default="true"/>
 
   <!-- Convert arg -> xacro property so it can be used inside ${...} -->
   <xacro:property name="hand_type" value="$(arg hand_type)"/>
@@ -57,6 +60,8 @@
     port="$(arg port)"
     session_id="$(arg session_id)"
   />
-  <xacro:include filename="$(find futur_hand_description)/config/hand_ros2_control.xacro"/>
+  <xacro:if value="$(arg hand_ros2_control)">
+    <xacro:include filename="$(find futur_hand_description)/config/hand_ros2_control.xacro"/>
+  </xacro:if>
 
 </robot>
