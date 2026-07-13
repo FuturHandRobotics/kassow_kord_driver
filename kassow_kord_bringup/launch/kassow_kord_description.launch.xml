@@ -23,23 +23,27 @@
   <arg name="description_package" default="kassow_kord_bringup" description="Description package with robot URDF/xacro files. Usually not set, it enables use of a custom description."/>
   <arg name="description_file" default="kassow_kord" description="URDF/XACRO description file with the robot."/>
   <arg name="prefix" default="kassow" description="Prefix of the joint names, useful for multi-robot setup. If changed, joint names in controller config must also be updated."/>
-  <arg name="use_mock_hardware" default="false" description="Whether to use mock hardware or real hardware."/>
+  <arg name="use_mock" default="false" description="Whether to use mock hardware or real hardware."/>
   <arg name="ip_address" default="192.168.33.2" description="IP address of the robot."/>
   <arg name="port" default="7582" description="Port of the robot."/>
   <arg name="session_id" default="1" description="Session ID of the robot."/>
   <arg name="hand_type" default="minimal" description="Which hand/tool xacro to attach."/>
   <arg name="robot_serial_number" default="42" description="Last two digits of the serial number of the robot, used for selecting the correct patched URDF variant."/>
   <arg name="nominal" default="false" description="Whether to use the nominal robot description or the patched one for a specific serial number. If true, robot_serial_number arg is ignored."/>
+  <arg name="hand_ros2_control" default="true" description="Include the hand ros2_control hardware block. Set false when a dedicated hand controller manager is launched separately."/>
+  <arg name="no_calib" default="false" description="Skip the hand's current-sensing calibration on real hardware and use the motors' current position as the 'open' reference instead."/>
 
   <let name="robot_description" value="$(command '$(find-exec xacro) $(find-pkg-share $(var description_package))/urdf/$(var description_file).urdf.xacro \
                                         prefix:=$(var prefix) \
-                                        use_mock_hardware:=$(var use_mock_hardware) \
+                                        use_mock:=$(var use_mock) \
                                         ip_address:=$(var ip_address) \
                                         port:=$(var port) \
                                         session_id:=$(var session_id) \
                                         hand_type:=$(var hand_type) \
                                         robot_serial_number:=$(var robot_serial_number) \
                                         nominal:=$(var nominal) \
+                                        hand_ros2_control:=$(var hand_ros2_control) \
+                                        no_calib:=$(var no_calib) \
                                         ')"/>
 
   <node pkg="robot_state_publisher" exec="robot_state_publisher" output="both">
