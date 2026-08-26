@@ -8,9 +8,6 @@
 
       # Specific kassow_joint properties can be changed with the keys [max_position, min_position, max_velocity, max_acceleration]
       # kassow_joint limits can be turned off with [has_velocity_limits, has_acceleration_limits]
-
-      # NON COBOT JOINT LIMITS. WILL TORQUE OUT ON REAL HARDWARE
-
       joint_limits:
         kassow_joint_1:
           has_position_limits: true
@@ -19,9 +16,7 @@
           has_velocity_limits: true
           max_velocity: 3.926   # 225°/s in radians/s
           has_acceleration_limits: true
-          max_acceleration: 20.0
-          # max_acceleration: 0.5
-          # max_acceleration: 0.3
+          max_acceleration: 10.0
         kassow_joint_2:
           has_position_limits: true
           min_position: -1.22   # -70° in radians
@@ -29,7 +24,7 @@
           has_velocity_limits: true
           max_velocity: 3.926   # 225°/s in radians/s
           has_acceleration_limits: true
-          max_acceleration: 20.0
+          max_acceleration: 7.0
         kassow_joint_3:
           has_position_limits: true
           min_position: -6.283  # -360° in radians
@@ -37,7 +32,7 @@
           has_velocity_limits: true
           max_velocity: 3.926   # 225°/s in radians/s
           has_acceleration_limits: true
-          max_acceleration: 20.0
+          max_acceleration: 10.0
         kassow_joint_4:
           has_position_limits: true
           min_position: -1.22   # -70° in radians
@@ -45,7 +40,7 @@
           has_velocity_limits: true
           max_velocity: 3.926   # 225°/s in radians/s
           has_acceleration_limits: true
-          max_acceleration: 20.0
+          max_acceleration: 10.0
         kassow_joint_5:
           has_position_limits: true
           min_position: -6.283  # -360° in radians
