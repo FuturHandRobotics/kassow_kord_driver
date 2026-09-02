@@ -37,7 +37,7 @@
   </include>
 
   <node pkg="controller_manager" exec="ros2_control_node" name="b_controlled_box_cm" output="both">
-    <param name="update_rate" value="250"/>
+    <param name="update_rate" value="500"/>
     <param from="$(var controllers_file_path)"/>
   </node>
 

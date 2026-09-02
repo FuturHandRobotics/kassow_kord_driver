@@ -14,7 +14,7 @@
 
 b_controlled_box_cm:
   ros__parameters:
-    update_rate: 250  # Hz
+    update_rate: 500  # Hz
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
@@ -35,7 +35,7 @@ joint_state_broadcaster:
 kassow_joint_trajectory_controller:
   ros__parameters:
     type: joint_trajectory_controller/JointTrajectoryController
-    update_rate: 250  # Hz
+    update_rate: 500  # Hz
     joints:
       - kassow_joint_1
       - kassow_joint_2
