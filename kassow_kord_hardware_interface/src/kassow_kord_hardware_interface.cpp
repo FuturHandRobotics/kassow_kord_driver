@@ -155,6 +155,16 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_init(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
+  // Optional. The controller's stock jitter halt triggers are 100 us average /
+  // 500 us max, which a client without a PREEMPT_RT kernel cannot hold -- the
+  // arm then soft-stops with condition 3001 (CBUN_KORD_BAD_CONN_QUALITY) a few
+  // tens of seconds after activation, while idle and tracking perfectly. The
+  // default here matches the value that ran reliably on the previous robot via
+  // its KORD.ini. Set to 0 to leave the controller's own configuration alone.
+  qoc_max_jitter_us = hw_params.find("qoc_max_jitter_us") != hw_params.end()
+                        ? std::stoi(hw_params.at("qoc_max_jitter_us"))
+                        : 5000000;
+
   if (info_.joints.size() != KORD_JOINT_COUNT)
   {
     RCLCPP_FATAL(
@@ -284,7 +294,38 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_configure(
   RCLCPP_INFO(
     get_logger(), "Connecting to Kassow Kord robot at ip %s | port %d | session id %d",
     ip_address.c_str(), port, session_id);
-  if (!kord_->connect())
+
+  bool connected = false;
+
+  if (qoc_max_jitter_us > 0)
+  {
+    // Only the fields set here are serialized, so this raises the jitter and
+    // roundtrip ceilings without disturbing anything else the controller is
+    // configured with. The lost-frame triggers are deliberately left alone:
+    // a genuinely dropped command stream should still halt the arm. This
+    // overload sends the config after connecting and waits until it is applied.
+    const auto limit = static_cast<uint32_t>(qoc_max_jitter_us);
+
+    kr2::kord::protocol::KORDConfig config;
+    config.setMaxRecentAvgSystemJitterUs(limit)
+      .setMaxRecentMaxSystemJitterUs(limit)
+      .setMaxRecentAvgRoundtripTimeUs(limit)
+      .setMaxRecentAvgCmdJitterUs(limit);
+
+    RCLCPP_INFO(
+      get_logger(),
+      "Raising the CBun jitter/roundtrip halt triggers to %u us (lost-frame triggers unchanged)",
+      limit);
+
+    connected = kord_->connect(config);
+  }
+  else
+  {
+    RCLCPP_INFO(get_logger(), "Using the controller's own connection-quality configuration");
+    connected = kord_->connect();
+  }
+
+  if (!connected)
   {
     RCLCPP_FATAL(get_logger(), "Failed to connect to Kassow Kord robot.");
     return hardware_interface::CallbackReturn::ERROR;
