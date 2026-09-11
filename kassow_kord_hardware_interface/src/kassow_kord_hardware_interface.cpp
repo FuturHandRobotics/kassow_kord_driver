@@ -430,10 +430,14 @@ hardware_interface::return_type KassowKordHardwareInterface::write(
     return hardware_interface::return_type::ERROR;
   }
 
-  // directJControl() only reports that the frame was handed to the socket, not
-  // that the controller acted on it. Periodically report what the arm is
-  // actually doing, and how far the commands are from the measured state, so a
-  // silently ignored command stream is visible here.
+  // directJControl() only reports that the frame reached the socket, not that
+  // the controller acted on it. Anything other than DirectJointControl while
+  // we are streaming commands means they are being accepted and discarded --
+  // which looks like success everywhere else, right up to MoveIt reporting a
+  // completed trajectory on an arm that never moved. Silent on the healthy
+  // path; the tracking error is only interesting once that is the case.
+  if (const auto motion = rcv_iface_->getMotionState();
+      motion != kr2::kord::protocol::EMotionState::DirectJointControl)
   {
     double max_err = 0.0;
     for (size_t i = 0; i < KORD_JOINT_COUNT; ++i)
@@ -441,9 +445,11 @@ hardware_interface::return_type KassowKordHardwareInterface::write(
       max_err = std::max(max_err, std::abs(position_cmds[i] - position_states[i]));
     }
 
-    RCLCPP_INFO_THROTTLE(
-      get_logger(), *get_clock(), 2000, "cmd vs state: max |cmd-state| = %.5f rad | motion: %s",
-      max_err, motion_state_name(rcv_iface_->getMotionState()));
+    RCLCPP_WARN_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "Commanding joints while motion state is %s, not DirectJointControl -- the arm is not "
+      "following these commands (max |cmd-state| = %.5f rad).",
+      motion_state_name(motion), max_err);
   }
 
   return hardware_interface::return_type::OK;
