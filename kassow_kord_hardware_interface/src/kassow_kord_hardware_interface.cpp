@@ -368,9 +368,30 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
 
   rcv_iface_->fetchData();
 
-  if (rcv_iface_->systemAlarmState())
+  if (const auto alarm_state = rcv_iface_->systemAlarmState(); alarm_state != 0)
   {
-    RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 2000, "Alarm detected, deactivating...");
+    // An alarm here deactivates the hardware, which takes down the state
+    // interfaces and everything downstream -- so say which alarm it was.
+    const kr2::utils::SystemAlarmStateDecoder decoder(alarm_state);
+    const char * severity = decoder.isCritical()      ? "critical"
+                            : decoder.isLatched()     ? "latched"
+                            : decoder.isRecoverable() ? "recoverable"
+                                                      : "unspecified";
+
+    RCLCPP_ERROR_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "Alarm detected, deactivating. %s | severity: %s | condition id: %u | motion: %s | safety "
+      "flags: %u",
+      decoder.decodeAsString().c_str(), severity, decoder.getConditionID(),
+      motion_state_name(rcv_iface_->getMotionState()), rcv_iface_->getRobotSafetyFlags());
+
+    for (const auto & event : rcv_iface_->getSystemEvents())
+    {
+      RCLCPP_ERROR_THROTTLE(
+        get_logger(), *get_clock(), 2000, "  system event: group %u, id %u",
+        static_cast<unsigned int>(event.event_group_), static_cast<unsigned int>(event.event_id_));
+    }
+
     return hardware_interface::return_type::ERROR;
   }
 
