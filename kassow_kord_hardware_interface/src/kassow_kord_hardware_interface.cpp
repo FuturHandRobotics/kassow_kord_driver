@@ -238,8 +238,8 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_activate(
 
   // Read initial joint positions and set them as the initial command values
   rcv_iface_->fetchData();
-  position_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_Q);
-  velocity_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_QD);
+  position_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_POSITIONS);
+  velocity_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_SPEED);
   acceleration_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
@@ -285,10 +285,10 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
     return hardware_interface::return_type::ERROR;
   }
 
-  position_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_Q);
-  velocity_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_QD);
+  position_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_POSITIONS);
+  velocity_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_SPEED);
   acceleration_states =
-    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_QDD);
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
 
   for (size_t i = 0; i < KORD_JOINT_COUNT; ++i)
