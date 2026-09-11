@@ -123,9 +123,12 @@ private:
   int port;
   int waitSync_timeout_ms;
 
-  // Ceiling sent to the CBun for its jitter/roundtrip halt triggers, in
-  // microseconds. 0 leaves the controller's own configuration alone.
-  int qoc_max_jitter_us;
+  // Overrides for the CBun's QOC_HALT_TRIGGER thresholds, sent at connect
+  // time. Each is opt-in: 0 leaves that field of the controller's own
+  // configuration alone.
+  int qoc_max_jitter_us;                 // avg/max system jitter, roundtrip, cmd jitter (us)
+  int qoc_max_recent_commands_lost;      // lost commands per 0.2 s window (50 ticks)
+  int qoc_max_consecutive_commands_lost; // consecutive lost commands
 };
 
 }  // namespace kassow_kord_hardware_interface
