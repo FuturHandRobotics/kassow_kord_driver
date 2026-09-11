@@ -12,6 +12,9 @@
 
 #include "kassow_kord_hardware_interface/kassow_kord_hardware_interface.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 
@@ -26,6 +29,79 @@
  */
 namespace kassow_kord_hardware_interface
 {
+namespace
+{
+const char * source_of_control_name(kr2::kord::protocol::ESourceOfControl v)
+{
+  switch (v)
+  {
+    case kr2::kord::protocol::ESourceOfControl::eUnknown:
+      return "Unknown";
+    case kr2::kord::protocol::ESourceOfControl::eDirect:
+      return "Direct (local/pendant)";
+    case kr2::kord::protocol::ESourceOfControl::eExternal:
+      return "External (KORD)";
+  }
+  return "?";
+}
+
+const char * operation_mode_name(kr2::kord::protocol::EOperationMode v)
+{
+  switch (v)
+  {
+    case kr2::kord::protocol::EOperationMode::eUnknown:
+      return "Unknown";
+    case kr2::kord::protocol::EOperationMode::eManualReduced:
+      return "ManualReduced";
+    case kr2::kord::protocol::EOperationMode::eManualHigh:
+      return "ManualHigh";
+    case kr2::kord::protocol::EOperationMode::eAutomatic:
+      return "Automatic";
+    case kr2::kord::protocol::EOperationMode::eRecovery:
+      return "Recovery";
+    case kr2::kord::protocol::EOperationMode::eOffline:
+      return "Offline";
+    case kr2::kord::protocol::EOperationMode::eMaintenance:
+      return "Maintenance";
+  }
+  return "?";
+}
+
+const char * motion_state_name(kr2::kord::protocol::EMotionState v)
+{
+  switch (v)
+  {
+    case kr2::kord::protocol::EMotionState::None:
+      return "None";
+    case kr2::kord::protocol::EMotionState::Standstill:
+      return "Standstill";
+    case kr2::kord::protocol::EMotionState::Tracking:
+      return "Tracking";
+    case kr2::kord::protocol::EMotionState::Stopping:
+      return "Stopping";
+    case kr2::kord::protocol::EMotionState::Resuming:
+      return "Resuming";
+    case kr2::kord::protocol::EMotionState::Jogging:
+      return "Jogging";
+    case kr2::kord::protocol::EMotionState::BackDrive:
+      return "BackDrive";
+    case kr2::kord::protocol::EMotionState::DirectJointControl:
+      return "DirectJointControl";
+    case kr2::kord::protocol::EMotionState::VelocityControl:
+      return "VelocityControl";
+    case kr2::kord::protocol::EMotionState::Halting:
+      return "Halting";
+    case kr2::kord::protocol::EMotionState::Halted:
+      return "Halted";
+    case kr2::kord::protocol::EMotionState::Suspended:
+      return "Suspended";
+    case kr2::kord::protocol::EMotionState::Paused:
+      return "Paused";
+  }
+  return "?";
+}
+}  // namespace
+
 hardware_interface::CallbackReturn KassowKordHardwareInterface::on_init(
   const hardware_interface::HardwareComponentInterfaceParams & params)
 {
@@ -260,6 +336,14 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_activate(
     set_command(joint_velocity_itfs_[i], velocity_states[i]);
     set_command(joint_acceleration_itfs_[i], acceleration_states[i]);
   }
+
+  log_robot_state("on_activate");
+
+  RCLCPP_INFO(
+    get_logger(), "Initial joint positions [rad]: %.4f %.4f %.4f %.4f %.4f %.4f %.4f",
+    position_states[0], position_states[1], position_states[2], position_states[3],
+    position_states[4], position_states[5], position_states[6]);
+
   RCLCPP_INFO(get_logger(), "Successfully activated!");
 
   return hardware_interface::CallbackReturn::SUCCESS;
@@ -325,7 +409,55 @@ hardware_interface::return_type KassowKordHardwareInterface::write(
     return hardware_interface::return_type::ERROR;
   }
 
+  // directJControl() only reports that the frame was handed to the socket, not
+  // that the controller acted on it. Periodically report what the arm is
+  // actually doing, and how far the commands are from the measured state, so a
+  // silently ignored command stream is visible here.
+  {
+    double max_err = 0.0;
+    for (size_t i = 0; i < KORD_JOINT_COUNT; ++i)
+    {
+      max_err = std::max(max_err, std::abs(position_cmds[i] - position_states[i]));
+    }
+
+    RCLCPP_INFO_THROTTLE(
+      get_logger(), *get_clock(), 2000, "cmd vs state: max |cmd-state| = %.5f rad | motion: %s",
+      max_err, motion_state_name(rcv_iface_->getMotionState()));
+  }
+
   return hardware_interface::return_type::OK;
+}
+
+
+void KassowKordHardwareInterface::log_robot_state(const char * context)
+{
+  const auto soc = rcv_iface_->getRobotSourceOfControl();
+  const auto mode = rcv_iface_->getRobotOperationMode();
+  const auto motion = rcv_iface_->getMotionState();
+
+  RCLCPP_INFO(
+    get_logger(), "[%s] source of control: %s | operation mode: %s | motion state: %s (%d)", context,
+    soc.has_value() ? source_of_control_name(*soc) : "n/a",
+    mode.has_value() ? operation_mode_name(*mode) : "n/a", motion_state_name(motion),
+    static_cast<int>(motion));
+
+  // Direct joint control frames only actually drive the arm once the
+  // controller is in DirectJointControl; anything else means the commands are
+  // being received and ignored.
+  if (motion != kr2::kord::protocol::EMotionState::DirectJointControl)
+  {
+    RCLCPP_WARN(
+      get_logger(),
+      "[%s] controller is not in DirectJointControl -- joint commands will not move the arm.",
+      context);
+  }
+
+  if (soc.has_value() && *soc != kr2::kord::protocol::ESourceOfControl::eExternal)
+  {
+    RCLCPP_WARN(
+      get_logger(), "[%s] robot is not under External (KORD) control -- commands will be ignored.",
+      context);
+  }
 }
 
 // clean all alarms

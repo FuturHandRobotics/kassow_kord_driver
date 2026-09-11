@@ -94,6 +94,12 @@ public:
 private:
   bool clean_alarms();
 
+  // Logs the controller's reported source of control, operation mode and
+  // motion state. Direct joint control frames are accepted at the protocol
+  // level regardless of these, so when the arm does not move they are the
+  // only way to see why from this side.
+  void log_robot_state(const char * context);
+
   std::shared_ptr<kr2::kord::KordCore> kord_;
   std::unique_ptr<kr2::kord::ControlInterface> ctl_iface_;
   std::unique_ptr<kr2::kord::ReceiverInterface> rcv_iface_;
