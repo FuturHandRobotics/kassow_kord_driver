@@ -43,6 +43,18 @@ target_link_libraries(${PROJECT_NAME}
     kord-api::kord-api
 )
 
+# kord-api/kord-protocol are vendored into install/kassow_kord_vendor/lib,
+# not a system path -- without an explicit RPATH the loader can fall back to
+# an unrelated system-wide libkord-api install (e.g. one baked into a base
+# Docker image at a different version) instead of this workspace's build.
+# INSTALL_RPATH_USE_LINK_PATH makes CMake compute the install RPATH from the
+# actual linked libraries' locations, rather than relying on ambient
+# CMAKE_INSTALL_RPATH_USE_LINK_PATH state that isn't guaranteed to be set.
+set_target_properties(${PROJECT_NAME} PROPERTIES
+  BUILD_WITH_INSTALL_RPATH FALSE
+  INSTALL_RPATH_USE_LINK_PATH TRUE
+)
+
 # prevent pluginlib from using boost
 target_compile_definitions(${PROJECT_NAME} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
 
