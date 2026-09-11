@@ -14,7 +14,13 @@
 
     <ros2_control name="${name}" type="system" is_async="true" rw_rate="250">
       <properties>
-        <async scheduling_policy="${scheduling_policy}" print_warnings="true" thread_priority="30"/>
+        <!-- This thread does the KORD read/write, i.e. the one command per 4 ms
+             tick the controller counts. At 30 it sat below the controller
+             manager's own 50 and lost scheduling contests, and every missed
+             cycle is a command the CBun counts as lost. Kassow's real-time
+             loop guidance recommends RT priority 80 for the control loop
+             (their benchmark client runs at 99, pinned). -->
+        <async scheduling_policy="${scheduling_policy}" print_warnings="true" thread_priority="80"/>
       </properties>
       <hardware>
         <xacro:if value="${use_mock_hardware}">
