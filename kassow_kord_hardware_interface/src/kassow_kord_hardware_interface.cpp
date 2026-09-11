@@ -324,57 +324,66 @@ hardware_interface::return_type KassowKordHardwareInterface::write(
 // clean all alarms
 bool KassowKordHardwareInterface::clean_alarms()
 {
-  rcv_iface_->fetchData();
-
-  if (rcv_iface_->systemAlarmState())
+  // fetchStatus() waits for a fresh status update from the controller and then
+  // copies it into the state structures; fetchData() alone only copies whatever
+  // was last captured. Right after connect() that can still be empty, which
+  // would make a robot with a live alarm look clean (or vice versa).
+  if (!rcv_iface_->fetchStatus())
   {
-    unsigned int motion_flags = rcv_iface_->getMotionFlags();
-    unsigned int safety_flags = rcv_iface_->getRobotSafetyFlags();
+    RCLCPP_WARN(get_logger(), "Could not fetch a fresh status; using last known state.");
+    rcv_iface_->fetchData();
+  }
 
-    // If nothing to clear, early exit
-    if (motion_flags == 0 && safety_flags == 0)
+  const auto alarm_state = rcv_iface_->systemAlarmState();
+
+  // Nothing to clear. Sending clear requests anyway means blocking on an
+  // acknowledgement the controller has no reason to send.
+  if (alarm_state == 0)
+  {
+    RCLCPP_INFO(get_logger(), "No alarms to clear.");
+    return true;
+  }
+
+  unsigned int motion_flags = rcv_iface_->getMotionFlags();
+  unsigned int safety_flags = rcv_iface_->getRobotSafetyFlags();
+
+  RCLCPP_INFO(get_logger(), "Motion flags: %d", motion_flags);
+  RCLCPP_INFO(get_logger(), "Robot safety flags: %d", safety_flags);
+
+  if (safety_flags & SafetyFlags::SAFETY_FLAG_USER_CONF_REQ)
+  {
+    RCLCPP_ERROR(get_logger(), "Errors cannot be cleared. User confirmation required.");
+  }
+
+  const bool is_halt = motion_flags & MotionFlags::MOTION_FLAG_HALT;
+  const bool is_pstop = safety_flags & SafetyFlags::SAFETY_FLAG_PSTOP;
+
+  if (is_halt && is_pstop)
+  {
+    RCLCPP_ERROR(get_logger(), "Halt Error.");
+  }
+
+  if (motion_flags & MotionFlags::MOTION_FLAG_SUSPENDED)
+  {
+    RCLCPP_ERROR(get_logger(), "Suspend Error.");
+  }
+
+  bool is_cbun = alarm_state & kr2::kord::protocol::CAT_CBUN_EVENT;
+
+  // Check for KORD event
+  const auto system_events = rcv_iface_->getSystemEvents();
+  for (auto & event : system_events)
+  {
+    if (event.event_group_ == kr2::kord::protocol::eKordEvent)
     {
-      RCLCPP_INFO(get_logger(), "No errors.");
+      is_cbun = true;
+      break;
     }
+  }
 
-    RCLCPP_INFO(get_logger(), "Motion flags: %d", motion_flags);
-    RCLCPP_INFO(get_logger(), "Robot safety flags: %d", safety_flags);
-
-    if (safety_flags & SafetyFlags::SAFETY_FLAG_USER_CONF_REQ)
-    {
-      RCLCPP_ERROR(get_logger(), "Errors cannot be cleared. User confirmation required.");
-    }
-
-    const bool is_halt = motion_flags & MotionFlags::MOTION_FLAG_HALT;
-    const bool is_pstop = safety_flags & SafetyFlags::SAFETY_FLAG_PSTOP;
-
-    if (is_halt && is_pstop)
-    {
-      RCLCPP_ERROR(get_logger(), "Halt Error.");
-    }
-
-    if (motion_flags & MotionFlags::MOTION_FLAG_SUSPENDED)
-    {
-      RCLCPP_ERROR(get_logger(), "Suspend Error.");
-    }
-
-    bool is_cbun = rcv_iface_->systemAlarmState() & kr2::kord::protocol::CAT_CBUN_EVENT;
-
-    // Check for KORD event
-    const auto system_events = rcv_iface_->getSystemEvents();
-    for (auto & event : system_events)
-    {
-      if (event.event_group_ == kr2::kord::protocol::eKordEvent)
-      {
-        is_cbun = true;
-        break;
-      }
-    }
-
-    if (is_cbun)
-    {
-      RCLCPP_ERROR(get_logger(), "CBun Error.");
-    }
+  if (is_cbun)
+  {
+    RCLCPP_ERROR(get_logger(), "CBun Error.");
   }
 
   // clear errors
@@ -383,6 +392,13 @@ bool KassowKordHardwareInterface::clean_alarms()
     {kr2::kord::ControlInterface::EClearRequest::CBUN_EVENT, "CBUN_EVENT"},
     {kr2::kord::ControlInterface::EClearRequest::CONTINUE_INIT, "CONTINUE_INIT"},
     {kr2::kord::ControlInterface::EClearRequest::UNSUSPEND, "UNSUSPEND"}};
+
+  // Bound how long we wait for each acknowledgement. kord-api's own request
+  // flows (KordCore::waitForResponse) poll with waitSync(1s) and no
+  // F_SYNC_FULL_ROTATION; requiring a complete frame-id rotation inside 10 ms
+  // and aborting on the first miss -- as this used to -- turns an unacked
+  // command into a failed activation, which takes down ros2_control_node.
+  constexpr auto ack_timeout = std::chrono::seconds(5);
 
   for (const auto & kv : commands_mapped)
   {
@@ -393,28 +409,53 @@ bool KassowKordHardwareInterface::clean_alarms()
     RCLCPP_INFO(
       get_logger(), "%s command sent with token: %ld", name.c_str(), static_cast<int64_t>(token));
 
-    // Poll for command status -- blocking
-    while (rcv_iface_->getCommandStatus(token) == -1)
+    const auto deadline = std::chrono::steady_clock::now() + ack_timeout;
+    int8_t status = -1;
+
+    while (std::chrono::steady_clock::now() < deadline)
     {
-      if (!kord_->waitSync(std::chrono::milliseconds(10), kr2::kord::F_SYNC_FULL_ROTATION))
+      if (!kord_->waitSync(std::chrono::seconds(1)))
       {
-        RCLCPP_ERROR(get_logger(), "Sync wait timed out, exiting.");
-        return false;
+        RCLCPP_WARN(get_logger(), "%s: sync wait failed while awaiting ack.", name.c_str());
+        continue;
       }
 
       rcv_iface_->fetchData();
+
+      status = rcv_iface_->getCommandStatus(token);
+      if (status != -1)
+      {
+        break;
+      }
     }
 
-    // Retrieve and log the command status
-    auto status = rcv_iface_->getCommandStatus(token);
     if (status != -1)
     {
       RCLCPP_INFO(get_logger(), "%s command status: %d", name.c_str(), static_cast<int>(status));
     }
     else
     {
-      RCLCPP_WARN(get_logger(), "%s command status remains unknown.", name.c_str());
-      return false;
+      RCLCPP_WARN(
+        get_logger(), "%s: no command status within %lds; continuing.", name.c_str(),
+        static_cast<long>(ack_timeout.count()));
+    }
+  }
+
+  // The acknowledgements above are advisory -- what actually matters is whether
+  // the alarm state went away. Report that explicitly rather than assuming the
+  // clears took effect because the commands were sent.
+  if (rcv_iface_->fetchStatus())
+  {
+    const auto remaining = rcv_iface_->systemAlarmState();
+    if (remaining != 0)
+    {
+      RCLCPP_WARN(
+        get_logger(), "Alarm state still set after clear attempts: 0x%x",
+        static_cast<unsigned int>(remaining));
+    }
+    else
+    {
+      RCLCPP_INFO(get_logger(), "Alarm state cleared.");
     }
   }
 
