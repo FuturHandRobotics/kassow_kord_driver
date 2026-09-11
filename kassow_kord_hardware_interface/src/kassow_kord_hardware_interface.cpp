@@ -155,15 +155,30 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_init(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  // Optional. The controller's stock jitter halt triggers are 100 us average /
-  // 500 us max, which a client without a PREEMPT_RT kernel cannot hold -- the
-  // arm then soft-stops with condition 3001 (CBUN_KORD_BAD_CONN_QUALITY) a few
-  // tens of seconds after activation, while idle and tracking perfectly. The
-  // default here matches the value that ran reliably on the previous robot via
-  // its KORD.ini. Set to 0 to leave the controller's own configuration alone.
-  qoc_max_jitter_us = hw_params.find("qoc_max_jitter_us") != hw_params.end()
-                        ? std::stoi(hw_params.at("qoc_max_jitter_us"))
-                        : 5000000;
+  // Optional overrides for the CBun's QOC_HALT_TRIGGER thresholds. When one is
+  // exceeded the controller soft-stops with condition 3001
+  // (CBUN_KORD_BAD_CONN_QUALITY) and this component deactivates.
+  //
+  // Kassow's reference client is a PREEMPT_RT kernel at RT priority 99 with
+  // the control loop pinned to dedicated cores; on a stock kernel sharing the
+  // machine with RViz and move_group, a ~20-30 ms scheduling stall is routine.
+  // At 250 Hz that is 5-8 consecutive ticks with no command, which the stock
+  // on_recent_commands_lost = 5 treats as a lost connection. Measured jitter
+  // here was 1-8 us -- well inside even the stock limits -- so the lost-frame
+  // thresholds are the ones that matter; the jitter ceiling is kept as
+  // headroom. Kassow describe KORD as soft real-time where "occasional
+  // deviations are tolerable", and the arm holds position across a gap.
+  //
+  // Defaults tolerate a ~100 ms stall (25 ticks) while still halting on a real
+  // dropout, which loses the whole 50-tick window. 0 leaves that field of the
+  // controller's own configuration alone.
+  const auto optional_int = [&hw_params](const char * name, int fallback) {
+    const auto it = hw_params.find(name);
+    return it != hw_params.end() ? std::stoi(it->second) : fallback;
+  };
+  qoc_max_jitter_us = optional_int("qoc_max_jitter_us", 5000000);
+  qoc_max_recent_commands_lost = optional_int("qoc_max_recent_commands_lost", 25);
+  qoc_max_consecutive_commands_lost = optional_int("qoc_max_consecutive_commands_lost", 25);
 
   if (info_.joints.size() != KORD_JOINT_COUNT)
   {
@@ -295,28 +310,45 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_configure(
     get_logger(), "Connecting to Kassow Kord robot at ip %s | port %d | session id %d",
     ip_address.c_str(), port, session_id);
 
-  bool connected = false;
+  // KORDConfig serializes only the fields that are set, so each override below
+  // touches one threshold and leaves the rest of the controller's configuration
+  // alone. The connect(KORDConfig) overload sends it after connecting and waits
+  // until the controller has applied it.
+  kr2::kord::protocol::KORDConfig config;
+  bool any_override = false;
 
   if (qoc_max_jitter_us > 0)
   {
-    // Only the fields set here are serialized, so this raises the jitter and
-    // roundtrip ceilings without disturbing anything else the controller is
-    // configured with. The lost-frame triggers are deliberately left alone:
-    // a genuinely dropped command stream should still halt the arm. This
-    // overload sends the config after connecting and waits until it is applied.
     const auto limit = static_cast<uint32_t>(qoc_max_jitter_us);
-
-    kr2::kord::protocol::KORDConfig config;
     config.setMaxRecentAvgSystemJitterUs(limit)
       .setMaxRecentMaxSystemJitterUs(limit)
       .setMaxRecentAvgRoundtripTimeUs(limit)
       .setMaxRecentAvgCmdJitterUs(limit);
+    RCLCPP_INFO(get_logger(), "QOC halt trigger: jitter/roundtrip ceiling -> %u us", limit);
+    any_override = true;
+  }
 
+  if (qoc_max_recent_commands_lost > 0)
+  {
+    const auto limit = static_cast<uint32_t>(qoc_max_recent_commands_lost);
+    config.setMaxRecentCommandsLost(limit);
     RCLCPP_INFO(
-      get_logger(),
-      "Raising the CBun jitter/roundtrip halt triggers to %u us (lost-frame triggers unchanged)",
-      limit);
+      get_logger(), "QOC halt trigger: lost commands per 0.2 s window -> %u (stock 5)", limit);
+    any_override = true;
+  }
 
+  if (qoc_max_consecutive_commands_lost > 0)
+  {
+    const auto limit = static_cast<uint32_t>(qoc_max_consecutive_commands_lost);
+    config.setMaxConsecutiveCommandsLost(limit);
+    RCLCPP_INFO(
+      get_logger(), "QOC halt trigger: consecutive lost commands -> %u (stock 2)", limit);
+    any_override = true;
+  }
+
+  bool connected = false;
+  if (any_override)
+  {
     connected = kord_->connect(config);
   }
   else
