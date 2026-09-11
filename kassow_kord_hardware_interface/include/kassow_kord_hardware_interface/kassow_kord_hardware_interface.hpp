@@ -122,6 +122,10 @@ private:
   int session_id;
   int port;
   int waitSync_timeout_ms;
+
+  // Ceiling sent to the CBun for its jitter/roundtrip halt triggers, in
+  // microseconds. 0 leaves the controller's own configuration alone.
+  int qoc_max_jitter_us;
 };
 
 }  // namespace kassow_kord_hardware_interface
