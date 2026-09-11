@@ -236,10 +236,15 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_activate(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  // Read initial joint positions and set them as the initial command values
+  // Read initial joint positions and set them as the initial command values.
+  // T_REFERENCE_* is v4's name for what v3 called S_ACTUAL_* -- both resolve to
+  // the same underlying RobotStatus members (positions_/speed_/accelerations_,
+  // from the eJConfigurationArm wire field). S_SENSED_* is a different field
+  // (eJSensedPosition) that existed under that same name in v3 too; it is not
+  // the v4 replacement for S_ACTUAL_* and is not populated on every controller.
   rcv_iface_->fetchData();
-  position_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_POSITIONS);
-  velocity_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_SPEED);
+  position_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_Q);
+  velocity_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_QD);
   acceleration_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
@@ -285,10 +290,12 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
     return hardware_interface::return_type::ERROR;
   }
 
-  position_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_POSITIONS);
-  velocity_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_SPEED);
+  // See the note in on_activate(): T_REFERENCE_* is v4's name for v3's
+  // S_ACTUAL_*, not S_SENSED_*.
+  position_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_Q);
+  velocity_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_QD);
   acceleration_states =
-    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_QDD);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
 
   for (size_t i = 0; i < KORD_JOINT_COUNT; ++i)
