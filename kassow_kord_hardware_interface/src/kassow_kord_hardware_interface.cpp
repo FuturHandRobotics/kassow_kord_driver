@@ -433,6 +433,31 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
         static_cast<unsigned int>(event.event_group_), static_cast<unsigned int>(event.event_id_));
     }
 
+    // Condition 3001 (CBUN_KORD_BAD_CONN_QUALITY) means one of the CBun's
+    // QOC_HALT_TRIGGER thresholds was exceeded, but not which. These are the
+    // controller's own statistics, and each maps onto one of those thresholds,
+    // so they say whether it tripped on lost commands or on jitter/roundtrip.
+    const auto stats = rcv_iface_->getStatisticsStructure();
+    RCLCPP_ERROR_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "  cmd lost (seq): window %ld global %ld | cmd lost (timestamp): window %ld global %ld",
+      static_cast<long>(stats.cmd_lost_window_seq), static_cast<long>(stats.cmd_lost_global_seq),
+      static_cast<long>(stats.cmd_lost_window_timestmp),
+      static_cast<long>(stats.cmd_lost_global_timestmp));
+    RCLCPP_ERROR_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "  system jitter us: window avg %d max %d, global max %d | roundtrip us: window avg %ld max "
+      "%ld, global max %ld | cmd jitter us: window avg %ld max %ld",
+      stats.system_jitter_window_avg, stats.system_jitter_window_max,
+      stats.system_jitter_global_max, static_cast<long>(stats.round_trip_window_avg),
+      static_cast<long>(stats.round_trip_window_max),
+      static_cast<long>(stats.round_trip_global_max),
+      static_cast<long>(stats.cmd_jitter_window_avg),
+      static_cast<long>(stats.cmd_jitter_window_max));
+    RCLCPP_ERROR_THROTTLE(
+      get_logger(), *get_clock(), 2000, "  socket read failures: empty %u, error %u",
+      stats.fail_to_read_empty, stats.fail_to_read_error);
+
     return hardware_interface::return_type::ERROR;
   }
 
