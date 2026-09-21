@@ -22,6 +22,46 @@ This package provides a software solution for controlling Kassow Kord Robot (KR8
   - multi-robot: individual prefixes are used (e.g., `kassow_left` and `kassow_right` in the dual-arm example)
 - This repository demonstrates multi-robot capabilities by controlling a real Kassow robot and a simulated Kassow robot simultaneously. However, the architecture supports any combination of multiple robots - the real+simulation setup is just one example implementation.
 
+## KORD / CBun firmware version
+
+Different physical KR810s in the field run different CBun firmware majors
+(v3 vs v4), and kord-api v3 and v4 are **not** interchangeable at the client
+library level: v4 dropped enumerators (`S_ACTUAL_Q`/`QD`/`QDD`) v3 code
+reads, added API v3 doesn't have (`connect(KORDConfig)`), and the client
+library itself refuses to connect if its own compiled-in major version
+doesn't match the CBun's (`Major version mismatch` in `kord.cpp`'s connect
+sequence). One build of `kassow_kord_hardware_interface`, linked against one
+kord-api version, can only ever talk to a CBun of that same major version —
+there's no runtime switch for this, you check out the branch matching your
+robot **before** building:
+
+| Branch | kord-api version | CBun firmware |
+|---|---|---|
+| `master` | v3.0.1-based | v3 |
+| `feature/kord_v4_beta11` | v4.0.0-beta11 | v4 |
+
+**`kassow_kord_vendor` must move with it.** `kassow_kord_hardware_interface`
+depends on the nested `kassow_kord_vendor` package (its own git repo, with
+its own remote — see `kassow_kord_vendor/README.md`) to actually vendor
+kord-api; its branches mirror the same split (`master` = v3 fork,
+`use-kord-api-v4-vendor` = v4). Checking out one of `kassow_kord_driver`'s
+two branches above without also checking out the matching
+`kassow_kord_vendor` branch will build against the wrong kord-api version.
+
+**Figuring out which version a robot needs:** ask on the pendant, or just
+try connecting — a version mismatch is refused immediately and loudly
+(`Major version mismatch: CBUN=<major>, API=<major>` in the driver's log),
+so there's no ambiguous half-working state to debug. Once connected, the
+driver also prints `KORD API version: ...` / `KORD Protocol version: ...` on
+startup, confirming what it's actually running.
+
+Coexisting as two pluginlib packages in one workspace, selectable by a
+launch argument, was considered and rejected: both kord-api builds use the
+same C++ namespace (`kr2::kord::*`), so two differently-versioned `.so`s
+loaded into the *same* process (e.g. a mixed-version dual-arm bringup) risk
+an ODR/symbol collision. Branch-per-version avoids that entirely — it's the
+one thing this split can't do for you.
+
 **Package Structure**
 
 ```bash
