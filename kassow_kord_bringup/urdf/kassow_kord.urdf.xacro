@@ -15,6 +15,10 @@
   <!-- Skip the hand's current-sensing calibration on real hardware and use
        the motors' current position as the 'open' reference instead. -->
   <xacro:arg name="no_calib" default="false"/>
+  <!-- Hardware component threading, see kassow_kord.ros2_control.xacro. -->
+  <xacro:arg name="hw_is_async" default="true"/>
+  <xacro:arg name="hw_rw_rate" default="250"/>
+  <xacro:arg name="hw_thread_priority" default="80"/>
 
   <!-- Convert arg -> xacro property so it can be used inside ${...} -->
   <xacro:property name="hand_type" value="$(arg hand_type)"/>
@@ -62,6 +66,9 @@
     ip_address="$(arg ip_address)"
     port="$(arg port)"
     session_id="$(arg session_id)"
+    is_async="$(arg hw_is_async)"
+    rw_rate="$(arg hw_rw_rate)"
+    thread_priority="$(arg hw_thread_priority)"
   />
   <xacro:if value="$(arg hand_ros2_control)">
     <xacro:include filename="$(find futur_hand_description)/config/hand_ros2_control.xacro"/>
