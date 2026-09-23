@@ -32,6 +32,9 @@
   <arg name="nominal" default="false" description="Whether to use the nominal robot description or the patched one for a specific serial number. If true, robot_serial_number arg is ignored."/>
   <arg name="hand_ros2_control" default="true" description="Include the hand ros2_control hardware block. Set false when a dedicated hand controller manager is launched separately."/>
   <arg name="no_calib" default="false" description="Skip the hand's current-sensing calibration on real hardware and use the motors' current position as the 'open' reference instead."/>
+  <arg name="hw_is_async" default="true" description="Run the hardware component's read/write in its own thread (true) or in the controller manager's RT loop (false)."/>
+  <arg name="hw_rw_rate" default="250" description="Hardware component read/write rate [Hz]; only used when hw_is_async is true."/>
+  <arg name="hw_thread_priority" default="80" description="SCHED_FIFO priority of the async hardware thread; only used when hw_is_async is true."/>
 
   <let name="robot_description" value="$(command '$(find-exec xacro) $(find-pkg-share $(var description_package))/urdf/$(var description_file).urdf.xacro \
                                         prefix:=$(var prefix) \
@@ -44,6 +47,9 @@
                                         nominal:=$(var nominal) \
                                         hand_ros2_control:=$(var hand_ros2_control) \
                                         no_calib:=$(var no_calib) \
+                                        hw_is_async:=$(var hw_is_async) \
+                                        hw_rw_rate:=$(var hw_rw_rate) \
+                                        hw_thread_priority:=$(var hw_thread_priority) \
                                         ')"/>
 
   <node pkg="robot_state_publisher" exec="robot_state_publisher" output="both">
