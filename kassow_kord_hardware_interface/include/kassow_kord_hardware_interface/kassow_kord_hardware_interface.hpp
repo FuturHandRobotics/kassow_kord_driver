@@ -23,6 +23,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -100,6 +101,10 @@ private:
   // only way to see why from this side.
   void log_robot_state(const char * context);
 
+  // Sends the configured end-of-arm tool load (LOAD1) to the controller and
+  // confirms it by reading it back. No-op when load1_mass is not configured.
+  bool apply_tool_load();
+
   std::shared_ptr<kr2::kord::KordCore> kord_;
   std::unique_ptr<kr2::kord::ControlInterface> ctl_iface_;
   std::unique_ptr<kr2::kord::ReceiverInterface> rcv_iface_;
@@ -129,6 +134,13 @@ private:
   int qoc_max_jitter_us;                 // avg/max system jitter, roundtrip, cmd jitter (us)
   int qoc_max_recent_commands_lost;      // lost commands per 0.2 s window (50 ticks)
   int qoc_max_consecutive_commands_lost; // consecutive lost commands
+
+  // End-of-arm tool load (KORD LOAD1: mass [kg], CoG [m] and inertia [kg m^2]
+  // in the tool flange frame), sent on activation so the controller's torque
+  // model includes the hand. Unset: the controller's own LOAD1 is left alone.
+  std::optional<double> load1_mass;
+  std::array<double, 3> load1_cog{};
+  std::array<double, 6> load1_inertia{};
 };
 
 }  // namespace kassow_kord_hardware_interface

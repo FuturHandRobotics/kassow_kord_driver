@@ -19,6 +19,10 @@
   <xacro:arg name="hw_is_async" default="true"/>
   <xacro:arg name="hw_rw_rate" default="250"/>
   <xacro:arg name="hw_thread_priority" default="80"/>
+  <!-- End-of-arm tool load (KORD LOAD1); empty mass = leave the controller's own. -->
+  <xacro:arg name="tool_mass" default=""/>
+  <xacro:arg name="tool_cog" default="0,0,0"/>
+  <xacro:arg name="tool_inertia" default="0,0,0,0,0,0"/>
 
   <!-- Convert arg -> xacro property so it can be used inside ${...} -->
   <xacro:property name="hand_type" value="$(arg hand_type)"/>
@@ -69,6 +73,9 @@
     is_async="$(arg hw_is_async)"
     rw_rate="$(arg hw_rw_rate)"
     thread_priority="$(arg hw_thread_priority)"
+    load1_mass="$(arg tool_mass)"
+    load1_cog="$(arg tool_cog)"
+    load1_inertia="$(arg tool_inertia)"
   />
   <xacro:if value="$(arg hand_ros2_control)">
     <xacro:include filename="$(find futur_hand_description)/config/hand_ros2_control.xacro"/>

@@ -12,7 +12,10 @@
                       scheduling_policy:=detached
                       is_async:=true
                       rw_rate:=250
-                      thread_priority:=80"
+                      thread_priority:=80
+                      load1_mass:=''
+                      load1_cog:=''
+                      load1_inertia:=''"
                       >
 
     <!-- is_async=false runs read()/write() in the controller manager's own RT
@@ -37,6 +40,13 @@
           <param name="port">${port}</param>
           <param name="session_id">${session_id}</param>
           <param name="waitSync_timeout_ms">${waitSync_timeout_ms}</param>
+          <!-- End-of-arm tool load (KORD LOAD1), sent on activation; empty = leave the
+               controller's own LOAD1. CoG / inertia: comma-separated, tool flange frame. -->
+          <xacro:if value="${str(load1_mass) != ''}">
+            <param name="load1_mass">${load1_mass}</param>
+            <param name="load1_cog">${load1_cog}</param>
+            <param name="load1_inertia">${load1_inertia}</param>
+          </xacro:if>
         </xacro:unless>
       </hardware>
 
