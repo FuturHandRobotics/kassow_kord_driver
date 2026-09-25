@@ -13,7 +13,10 @@
 #include "kassow_kord_hardware_interface/kassow_kord_hardware_interface.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <sstream>
+#include <variant>
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -26,6 +29,10 @@
  *   - port (int, required): Port number for Kord connection.
  *   - session_id (int, required): Kord session ID.
  *   - waitSync_timeout_ms (int, required): Kord session ID.
+ *   - load1_mass (double, optional): end-of-arm tool mass [kg], sent as KORD LOAD1 on
+ *     activation and confirmed by readback. Unset leaves the controller's LOAD1 alone.
+ *   - load1_cog (3 doubles, optional): tool centre of gravity [m], tool flange frame.
+ *   - load1_inertia (6 doubles, optional): tool inertia xx yy zz xy xz yz [kg m^2].
  */
 namespace kassow_kord_hardware_interface
 {
@@ -179,6 +186,53 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_init(
   qoc_max_jitter_us = optional_int("qoc_max_jitter_us", 5000000);
   qoc_max_recent_commands_lost = optional_int("qoc_max_recent_commands_lost", 25);
   qoc_max_consecutive_commands_lost = optional_int("qoc_max_consecutive_commands_lost", 25);
+
+  // Optional end-of-arm tool load (LOAD1). Values are "x y z" / "xx yy zz xy xz yz"
+  // (commas, spaces and brackets all accepted), in the tool flange frame.
+  const auto parse_list = [this, &hw_params](const char * name, double * out, size_t n) {
+    const auto it = hw_params.find(name);
+    if (it == hw_params.end() || it->second.empty())
+    {
+      return true;
+    }
+    std::string text = it->second;
+    for (char & ch : text)
+    {
+      if (ch == ',' || ch == '[' || ch == ']')
+      {
+        ch = ' ';
+      }
+    }
+    std::istringstream in(text);
+    size_t count = 0;
+    double value;
+    while (in >> value)
+    {
+      if (count < n)
+      {
+        out[count] = value;
+      }
+      ++count;
+    }
+    if (count != n)
+    {
+      RCLCPP_FATAL(
+        get_logger(), "Parameter '%s' needs %zu values, got %zu ('%s')", name, n, count,
+        it->second.c_str());
+      return false;
+    }
+    return true;
+  };
+  if (const auto it = hw_params.find("load1_mass"); it != hw_params.end() && !it->second.empty())
+  {
+    load1_mass = std::stod(it->second);
+    if (
+      !parse_list("load1_cog", load1_cog.data(), load1_cog.size()) ||
+      !parse_list("load1_inertia", load1_inertia.data(), load1_inertia.size()))
+    {
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+  }
 
   if (info_.joints.size() != KORD_JOINT_COUNT)
   {
@@ -385,6 +439,13 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_activate(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
+  // Tool load before any command goes out: the controller's torque model (and
+  // its over-torque monitoring) must include the hand from the first cycle.
+  if (!apply_tool_load())
+  {
+    return hardware_interface::CallbackReturn::ERROR;
+  }
+
   // Read initial joint positions and set them as the initial command values.
   // T_REFERENCE_* is v4's name for what v3 called S_ACTUAL_* -- both resolve to
   // the same underlying RobotStatus members (positions_/speed_/accelerations_,
@@ -586,6 +647,92 @@ void KassowKordHardwareInterface::log_robot_state(const char * context)
 }
 
 // clean all alarms
+bool KassowKordHardwareInterface::apply_tool_load()
+{
+  if (!load1_mass)
+  {
+    RCLCPP_INFO(get_logger(), "No load1_mass configured; leaving the controller's LOAD1 as is.");
+    return true;
+  }
+
+  const double mass = *load1_mass;
+  RCLCPP_INFO(
+    get_logger(),
+    "Setting LOAD1 (end-of-arm tool): mass %.3f kg, CoG [%.4f %.4f %.4f] m, "
+    "inertia [%.5f %.5f %.5f %.5f %.5f %.5f] kg m^2",
+    mass, load1_cog[0], load1_cog[1], load1_cog[2], load1_inertia[0], load1_inertia[1],
+    load1_inertia[2], load1_inertia[3], load1_inertia[4], load1_inertia[5]);
+
+  int64_t token = -1;
+  if (!ctl_iface_->setLoad(kr2::kord::LOAD1, mass, load1_cog, load1_inertia, token))
+  {
+    RCLCPP_FATAL(get_logger(), "Failed to send the LOAD1 command.");
+    return false;
+  }
+
+  // Same bounded wait as clean_alarms(): poll the command status per frame.
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  int8_t status = -1;
+  while (status == -1 && std::chrono::steady_clock::now() < deadline)
+  {
+    if (!kord_->waitSync(std::chrono::seconds(1)))
+    {
+      continue;
+    }
+    rcv_iface_->fetchData();
+    status = rcv_iface_->getCommandStatus(token);
+  }
+  RCLCPP_INFO(get_logger(), "LOAD1 command status: %d", static_cast<int>(status));
+
+  // The command status is advisory; what matters is what the controller now
+  // holds. Read it back (a few frames, the status update can lag the ack).
+  const auto as_double = [](const std::variant<double, int> & v) {
+    return std::holds_alternative<double>(v) ? std::get<double>(v)
+                                             : static_cast<double>(std::get<int>(v));
+  };
+  double read_mass = std::numeric_limits<double>::quiet_NaN();
+  std::vector<std::variant<double, int>> read_cog;
+  for (int attempt = 0; attempt < 50; ++attempt)
+  {
+    if (kord_->waitSync(std::chrono::milliseconds(100)))
+    {
+      rcv_iface_->fetchData();
+    }
+    const auto m = rcv_iface_->getLoad(kr2::kord::LOAD1, kr2::kord::MASS_VAL);
+    if (!m.empty())
+    {
+      read_mass = as_double(m.front());
+      read_cog = rcv_iface_->getLoad(kr2::kord::LOAD1, kr2::kord::COG_VAL);
+      if (std::abs(read_mass - mass) < 1e-3)
+      {
+        break;
+      }
+    }
+  }
+
+  if (std::isnan(read_mass) || std::abs(read_mass - mass) >= 1e-3)
+  {
+    RCLCPP_FATAL(
+      get_logger(),
+      "Controller reports LOAD1 mass %.4f kg after setting %.4f kg; refusing to run with a "
+      "torque model that does not include the tool.",
+      read_mass, mass);
+    return false;
+  }
+
+  if (read_cog.size() >= 3)
+  {
+    RCLCPP_INFO(
+      get_logger(), "LOAD1 confirmed by the controller: mass %.3f kg, CoG [%.4f %.4f %.4f] m",
+      read_mass, as_double(read_cog[0]), as_double(read_cog[1]), as_double(read_cog[2]));
+  }
+  else
+  {
+    RCLCPP_INFO(get_logger(), "LOAD1 confirmed by the controller: mass %.3f kg", read_mass);
+  }
+  return true;
+}
+
 bool KassowKordHardwareInterface::clean_alarms()
 {
   // fetchStatus() waits for a fresh status update from the controller and then

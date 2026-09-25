@@ -35,6 +35,9 @@
   <arg name="hw_is_async" default="true" description="Run the hardware component's read/write in its own thread (true) or in the controller manager's RT loop (false)."/>
   <arg name="hw_rw_rate" default="250" description="Hardware component read/write rate [Hz]; only used when hw_is_async is true."/>
   <arg name="hw_thread_priority" default="80" description="SCHED_FIFO priority of the async hardware thread; only used when hw_is_async is true."/>
+  <arg name="tool_mass" default="" description="End-of-arm tool mass [kg] sent to the controller as LOAD1 on activation. Empty leaves the controller's own LOAD1."/>
+  <arg name="tool_cog" default="0,0,0" description="Tool centre of gravity x,y,z [m] in the tool flange frame (comma-separated, no spaces)."/>
+  <arg name="tool_inertia" default="0,0,0,0,0,0" description="Tool inertia xx,yy,zz,xy,xz,yz [kg m^2] (comma-separated, no spaces)."/>
 
   <let name="robot_description" value="$(command '$(find-exec xacro) $(find-pkg-share $(var description_package))/urdf/$(var description_file).urdf.xacro \
                                         prefix:=$(var prefix) \
@@ -50,6 +53,9 @@
                                         hw_is_async:=$(var hw_is_async) \
                                         hw_rw_rate:=$(var hw_rw_rate) \
                                         hw_thread_priority:=$(var hw_thread_priority) \
+                                        tool_mass:=$(var tool_mass) \
+                                        tool_cog:=$(var tool_cog) \
+                                        tool_inertia:=$(var tool_inertia) \
                                         ')"/>
 
   <node pkg="robot_state_publisher" exec="robot_state_publisher" output="both">
