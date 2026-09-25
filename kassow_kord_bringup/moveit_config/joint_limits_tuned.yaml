@@ -1,12 +1,14 @@
 /**:
   ros__parameters:    # kassow_joint_limits.yaml allows the dynamics properties specified in the URDF to be overwritten or augmented as needed
     robot_description_planning:
-      # TUNED preset: the MAXIMUM limits validated on the real robot -- 50% of the
-      # default velocity and acceleration, per joint. Arrived at empirically on
-      # 2026-09-24/25: 80% tripped a joint overtorque fault on move_to_home once that
-      # task's own scaling was also at 1.0, and 75% still felt high. Do not raise these
-      # without re-testing on hardware; joint_limits_slow.yaml is the gentler preset for
-      # first runs of a new cell or task.
+      # TUNED preset: the MAXIMUM limits validated on the real robot -- full default
+      # velocity, 75% of the default acceleration, per joint. Arrived at empirically
+      # on 2026-09-24/25, working down from a joint overtorque trip: 100% acceleration
+      # (the full default) trips; 75% holds and is close to what the robot can actually
+      # sustain. Velocity at 100% has run clean alongside it. Do not raise the
+      # acceleration without re-testing on hardware -- 100% is known to fault.
+      # joint_limits_slow.yaml (10% of default) is the gentler preset for the first run
+      # of a new cell, task or layer.
       #
       # These bounds are what the MTC stages scale against, so a task YAML's
       # max_velocity_scaling: 0.1 means 10% OF THESE. Select it per launch with
@@ -23,54 +25,54 @@
           min_position: -6.283  # -360° in radians
           max_position: 6.283   # +360° in radians
           has_velocity_limits: true
-          max_velocity: 1.963   # 112 deg/s (50% of the default preset's 3.926)
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
           has_acceleration_limits: true
-          max_acceleration: 5.0   # 50% of the default preset's 10.0
+          max_acceleration: 7.5   # 75% of the default preset's 10.0
         kassow_joint_2:
           has_position_limits: true
           min_position: -1.22   # -70° in radians
           max_position: 3.141   # +180° in radians
           has_velocity_limits: true
-          max_velocity: 1.963   # 112 deg/s (50% of the default preset's 3.926)
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
           has_acceleration_limits: true
-          max_acceleration: 3.5 # 50% of the default preset's 7.0
+          max_acceleration: 5.25   # 75% of the default preset's 7.0
         kassow_joint_3:
           has_position_limits: true
           min_position: -6.283  # -360° in radians
           max_position: 6.283   # +360° in radians
           has_velocity_limits: true
-          max_velocity: 1.963   # 112 deg/s (50% of the default preset's 3.926)
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
           has_acceleration_limits: true
-          max_acceleration: 5.0 # 50% of the default preset's 10.0
+          max_acceleration: 7.5   # 75% of the default preset's 10.0
         kassow_joint_4:
           has_position_limits: true
           min_position: -1.22   # -70° in radians
           max_position: 3.141   # +180° in radians
           has_velocity_limits: true
-          max_velocity: 1.963   # 112 deg/s (50% of the default preset's 3.926)
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
           has_acceleration_limits: true
-          max_acceleration: 5.0 # 50% of the default preset's 10.0
+          max_acceleration: 7.5   # 75% of the default preset's 10.0
         kassow_joint_5:
           has_position_limits: true
           min_position: -6.283  # -360° in radians
           max_position: 6.283   # +360° in radians
           has_velocity_limits: true
-          max_velocity: 1.963   # 112 deg/s (50% of the default preset's 3.926)
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
           has_acceleration_limits: true
-          max_acceleration: 10.0 # 50% of the default preset's 20.0
+          max_acceleration: 15.0   # 75% of the default preset's 20.0
         kassow_joint_6:
           has_position_limits: true
           min_position: -6.283  # -360° in radians
           max_position: 6.283   # +360° in radians
           has_velocity_limits: true
-          max_velocity: 1.963   # 112 deg/s (50% of the default preset's 3.926)
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
           has_acceleration_limits: true
-          max_acceleration: 10.0 # 50% of the default preset's 20.0
+          max_acceleration: 15.0   # 75% of the default preset's 20.0
         kassow_joint_7:
           has_position_limits: true
           min_position: -6.283  # -360° in radians
           max_position: 6.283   # +360° in radians
           has_velocity_limits: true
-          max_velocity: 1.963   # 112 deg/s (50% of the default preset's 3.926)
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
           has_acceleration_limits: true
-          max_acceleration: 10.0  # 50% of the default preset's 20.0
+          max_acceleration: 15.0   # 75% of the default preset's 20.0
