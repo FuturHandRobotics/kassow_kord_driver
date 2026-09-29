@@ -24,10 +24,52 @@ foreach(PACKAGE ${THIS_PACKAGE_DEPS})
   find_package(${PACKAGE} REQUIRED)
 endforeach()
 
+# kord-api v3 and v4 differ in a few places this driver touches. The client
+# library's major must match the robot's CBun, so the same source is built
+# against either (the RT box picks one per robot, futur_docker build_rt_ws).
+# Feature checks rather than version numbers: the v3.0.1 fork, upstream
+# v3.0.2 and v4 all resolve correctly.
+#   KORD_HAS_S_ACTUAL      joint state as S_ACTUAL_Q/QD/QDD (v3). v4 renamed
+#                          them T_REFERENCE_*; v3 also declares T_REFERENCE_*
+#                          but getJoint() returns nothing for them, so this
+#                          must be decided here, not by what compiles.
+#   KORD_HAS_MOTION_STATE  getMotionState() / EMotionState (v4 only).
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_LIBRARIES kord-api::kord-api)
+set(CMAKE_REQUIRED_FLAGS "-std=c++17")
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+check_cxx_source_compiles("
+  #include <kord/api/kord_receive_interface.h>
+  int main() { auto v = kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_Q; (void)v; return 0; }"
+  KORD_HAS_S_ACTUAL)
+check_cxx_source_compiles("
+  #include <kord/api/kord_receive_interface.h>
+  int main() {
+    auto f = &kr2::kord::ReceiverInterface::getMotionState; (void)f;
+    auto s = kr2::kord::protocol::EMotionState::DirectJointControl; (void)s;
+    return 0;
+  }"
+  KORD_HAS_MOTION_STATE)
+unset(CMAKE_TRY_COMPILE_TARGET_TYPE)
+unset(CMAKE_REQUIRED_FLAGS)
+unset(CMAKE_REQUIRED_LIBRARIES)
+if(KORD_HAS_S_ACTUAL)
+  message(STATUS "kord-api: joint state from S_ACTUAL_* (v3)")
+else()
+  message(STATUS "kord-api: joint state from T_REFERENCE_* (v4)")
+endif()
+if(NOT KORD_HAS_MOTION_STATE)
+  message(STATUS "kord-api: no motion state API (v3), motion flags are logged instead")
+endif()
+
 add_library(
   ${PROJECT_NAME}
   SHARED
   src/kassow_kord_hardware_interface.cpp
+)
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+  KORD_HAS_S_ACTUAL=$<BOOL:${KORD_HAS_S_ACTUAL}>
+  KORD_HAS_MOTION_STATE=$<BOOL:${KORD_HAS_MOTION_STATE}>
 )
 target_include_directories(
   ${PROJECT_NAME}

@@ -24,43 +24,40 @@ This package provides a software solution for controlling Kassow Kord Robot (KR8
 
 ## KORD / CBun firmware version
 
-Different physical KR810s in the field run different CBun firmware majors
-(v3 vs v4), and kord-api v3 and v4 are **not** interchangeable at the client
-library level: v4 dropped enumerators (`S_ACTUAL_Q`/`QD`/`QDD`) v3 code
-reads, added API v3 doesn't have (`connect(KORDConfig)`), and the client
-library itself refuses to connect if its own compiled-in major version
-doesn't match the CBun's (`Major version mismatch` in `kord.cpp`'s connect
-sequence). One build of `kassow_kord_hardware_interface`, linked against one
-kord-api version, can only ever talk to a CBun of that same major version —
-there's no runtime switch for this, you check out the branch matching your
-robot **before** building:
+Different KR810s run different CBun firmware majors (v3 vs v4), and the
+kord-api client refuses to connect unless its own major matches the CBun's
+(`Major version mismatch: CBUN=..., API=...`; only the major is compared, so
+client 3.0.2 talks to CBun 3.0.3). One build of
+`kassow_kord_hardware_interface` links one kord-api version, so the version
+is chosen **when building**, per robot. The same source builds against both:
 
-| Branch | kord-api version | CBun firmware |
-|---|---|---|
-| `master` | v3.0.1-based | v3 |
-| `feature/kord_v4_beta11` | v4.0.0-beta11 | v4 |
+| kord-api | CBun | Joint state read from | Motion state in logs |
+|---|---|---|---|
+| v3.0.2 (upstream) | v3.x | `S_ACTUAL_Q/QD/QDD` | motion flags (v3 has no motion state) |
+| v4.0.0-beta11 | v4 | `T_REFERENCE_Q/QD/QDD` | `getMotionState()` |
 
-**`kassow_kord_vendor` must move with it.** `kassow_kord_hardware_interface`
-depends on the nested `kassow_kord_vendor` package (its own git repo, with
-its own remote — see `kassow_kord_vendor/README.md`) to actually vendor
-kord-api; its branches mirror the same split (`master` = v3 fork,
-`use-kord-api-v4-vendor` = v4). Checking out one of `kassow_kord_driver`'s
-two branches above without also checking out the matching
-`kassow_kord_vendor` branch will build against the wrong kord-api version.
+CMake feature checks (`KORD_HAS_S_ACTUAL`, `KORD_HAS_MOTION_STATE`, printed
+as `kord-api: ...` at configure time) pick the right calls. They test the
+API, not a version number, because v3 also *declares* `T_REFERENCE_*` but its
+`getJoint()` returns nothing for them: code that only compiled would read
+empty joint states. On v3 the "not in DirectJointControl" warnings are
+unavailable (no motion state to test). The driver logs the kord-api it was
+built with (`... | kord-api <version>`), and on connect kord-api logs
+`Connected to CBun, version: <cbun>, API version: <api>`.
 
-**Figuring out which version a robot needs:** ask on the pendant, or just
-try connecting — a version mismatch is refused immediately and loudly
-(`Major version mismatch: CBUN=<major>, API=<major>` in the driver's log),
-so there's no ambiguous half-working state to debug. Once connected, the
-driver also prints `KORD API version: ...` / `KORD Protocol version: ...` on
-startup, confirming what it's actually running.
+**Choosing the version.** `kassow_kord_vendor` fetches kord-api with
+FetchContent; point it at a clone of upstream `kassowrobots/kord-api` at the
+right tag with `-DFETCHCONTENT_SOURCE_DIR_KORD_API=<path>`. On the RT control
+box, `futur_docker/ros-jazzy-rt`'s `build_rt_ws` does this from
+`FUTUR_KORD_API_VERSION` in `/etc/futur/rt_box.conf`. Avoid the vendor's
+default source (`b-robotized-forks/kord-api@fix/version-override`, v3.0.1):
+it forces the version check to pass, so a mismatch is never reported.
 
-Coexisting as two pluginlib packages in one workspace, selectable by a
-launch argument, was considered and rejected: both kord-api builds use the
-same C++ namespace (`kr2::kord::*`), so two differently-versioned `.so`s
-loaded into the *same* process (e.g. a mixed-version dual-arm bringup) risk
-an ODR/symbol collision. Branch-per-version avoids that entirely — it's the
-one thing this split can't do for you.
+Two differently-versioned driver plugins selectable by a launch argument
+were considered and rejected: both kord-api builds use the same C++
+namespace (`kr2::kord::*`) and library names, so they can't share one install
+or process safely. Each RT box is wired to one robot, so a build-time choice
+costs nothing.
 
 **Package Structure**
 

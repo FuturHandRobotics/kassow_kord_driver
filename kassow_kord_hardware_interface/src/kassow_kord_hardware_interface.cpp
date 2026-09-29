@@ -74,6 +74,7 @@ const char * operation_mode_name(kr2::kord::protocol::EOperationMode v)
   return "?";
 }
 
+#if KORD_HAS_MOTION_STATE
 const char * motion_state_name(kr2::kord::protocol::EMotionState v)
 {
   switch (v)
@@ -106,6 +107,47 @@ const char * motion_state_name(kr2::kord::protocol::EMotionState v)
       return "Paused";
   }
   return "?";
+}
+#endif
+
+// kord-api v3 / v4 (feature checks in CMakeLists.txt). The joint values that
+// carry the arm's configuration are S_ACTUAL_* in v3 and T_REFERENCE_* in v4:
+// renamed, same RobotStatus fields (positions_/speed_/accelerations_, from the
+// eJConfigurationArm wire field). S_SENSED_* is a different field
+// (eJSensedPosition) in both and is not the replacement.
+using EJointValue = kr2::kord::ReceiverInterface::EJointValue;
+#if KORD_HAS_S_ACTUAL
+constexpr EJointValue JOINT_Q = EJointValue::S_ACTUAL_Q;
+constexpr EJointValue JOINT_QD = EJointValue::S_ACTUAL_QD;
+constexpr EJointValue JOINT_QDD = EJointValue::S_ACTUAL_QDD;
+#else
+constexpr EJointValue JOINT_Q = EJointValue::T_REFERENCE_Q;
+constexpr EJointValue JOINT_QD = EJointValue::T_REFERENCE_QD;
+constexpr EJointValue JOINT_QDD = EJointValue::T_REFERENCE_QDD;
+#endif
+
+// Motion state for log lines. v3 has no motion state, only motion flags.
+std::string motion_description(kr2::kord::ReceiverInterface & rcv)
+{
+#if KORD_HAS_MOTION_STATE
+  const auto motion = rcv.getMotionState();
+  return std::string(motion_state_name(motion)) + " (" +
+         std::to_string(static_cast<int>(motion)) + ")";
+#else
+  return "motion flags " + std::to_string(rcv.getMotionFlags());
+#endif
+}
+
+// Whether the controller is in DirectJointControl, i.e. acting on the joint
+// commands; nullopt where the kord-api can't tell (v3).
+std::optional<bool> in_direct_joint_control(kr2::kord::ReceiverInterface & rcv)
+{
+#if KORD_HAS_MOTION_STATE
+  return rcv.getMotionState() == kr2::kord::protocol::EMotionState::DirectJointControl;
+#else
+  (void)rcv;
+  return std::nullopt;
+#endif
 }
 }  // namespace
 
@@ -361,8 +403,8 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_configure(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
   RCLCPP_INFO(
-    get_logger(), "Connecting to Kassow Kord robot at ip %s | port %d | session id %d",
-    ip_address.c_str(), port, session_id);
+    get_logger(), "Connecting to Kassow Kord robot at ip %s | port %d | session id %d | kord-api %s",
+    ip_address.c_str(), port, session_id, API_VERSION);
 
   // KORDConfig serializes only the fields that are set, so each override below
   // touches one threshold and leaves the rest of the controller's configuration
@@ -446,15 +488,11 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_activate(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  // Read initial joint positions and set them as the initial command values.
-  // T_REFERENCE_* is v4's name for what v3 called S_ACTUAL_* -- both resolve to
-  // the same underlying RobotStatus members (positions_/speed_/accelerations_,
-  // from the eJConfigurationArm wire field). S_SENSED_* is a different field
-  // (eJSensedPosition) that existed under that same name in v3 too; it is not
-  // the v4 replacement for S_ACTUAL_* and is not populated on every controller.
+  // Read initial joint positions and set them as the initial command values
+  // (JOINT_Q/QD: S_ACTUAL_* on v3, T_REFERENCE_* on v4, see the top of this file).
   rcv_iface_->fetchData();
-  position_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_Q);
-  velocity_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_QD);
+  position_states = rcv_iface_->getJoint(JOINT_Q);
+  velocity_states = rcv_iface_->getJoint(JOINT_QD);
   acceleration_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
@@ -506,7 +544,8 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
   {
     // An alarm here deactivates the hardware, which takes down the state
     // interfaces and everything downstream -- so say which alarm it was.
-    const kr2::utils::SystemAlarmStateDecoder decoder(alarm_state);
+    // Not const: v3's decodeAsString() isn't a const member.
+    kr2::utils::SystemAlarmStateDecoder decoder(alarm_state);
     const char * severity = decoder.isCritical()      ? "critical"
                             : decoder.isLatched()     ? "latched"
                             : decoder.isRecoverable() ? "recoverable"
@@ -517,7 +556,7 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
       "Alarm detected, deactivating. %s | severity: %s | condition id: %u | motion: %s | safety "
       "flags: %u",
       decoder.decodeAsString().c_str(), severity, decoder.getConditionID(),
-      motion_state_name(rcv_iface_->getMotionState()), rcv_iface_->getRobotSafetyFlags());
+      motion_description(*rcv_iface_).c_str(), rcv_iface_->getRobotSafetyFlags());
 
     for (const auto & event : rcv_iface_->getSystemEvents())
     {
@@ -554,12 +593,9 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
     return hardware_interface::return_type::ERROR;
   }
 
-  // See the note in on_activate(): T_REFERENCE_* is v4's name for v3's
-  // S_ACTUAL_*, not S_SENSED_*.
-  position_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_Q);
-  velocity_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_QD);
-  acceleration_states =
-    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_QDD);
+  position_states = rcv_iface_->getJoint(JOINT_Q);
+  velocity_states = rcv_iface_->getJoint(JOINT_QD);
+  acceleration_states = rcv_iface_->getJoint(JOINT_QDD);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
 
   for (size_t i = 0; i < KORD_JOINT_COUNT; ++i)
@@ -595,8 +631,8 @@ hardware_interface::return_type KassowKordHardwareInterface::write(
   // which looks like success everywhere else, right up to MoveIt reporting a
   // completed trajectory on an arm that never moved. Silent on the healthy
   // path; the tracking error is only interesting once that is the case.
-  if (const auto motion = rcv_iface_->getMotionState();
-      motion != kr2::kord::protocol::EMotionState::DirectJointControl)
+  // (Not available on v3, which reports no motion state.)
+  if (const auto direct = in_direct_joint_control(*rcv_iface_); direct.has_value() && !*direct)
   {
     double max_err = 0.0;
     for (size_t i = 0; i < KORD_JOINT_COUNT; ++i)
@@ -608,7 +644,7 @@ hardware_interface::return_type KassowKordHardwareInterface::write(
       get_logger(), *get_clock(), 2000,
       "Commanding joints while motion state is %s, not DirectJointControl -- the arm is not "
       "following these commands (max |cmd-state| = %.5f rad).",
-      motion_state_name(motion), max_err);
+      motion_description(*rcv_iface_).c_str(), max_err);
   }
 
   return hardware_interface::return_type::OK;
@@ -619,18 +655,17 @@ void KassowKordHardwareInterface::log_robot_state(const char * context)
 {
   const auto soc = rcv_iface_->getRobotSourceOfControl();
   const auto mode = rcv_iface_->getRobotOperationMode();
-  const auto motion = rcv_iface_->getMotionState();
 
   RCLCPP_INFO(
-    get_logger(), "[%s] source of control: %s | operation mode: %s | motion state: %s (%d)", context,
+    get_logger(), "[%s] source of control: %s | operation mode: %s | motion state: %s", context,
     soc.has_value() ? source_of_control_name(*soc) : "n/a",
-    mode.has_value() ? operation_mode_name(*mode) : "n/a", motion_state_name(motion),
-    static_cast<int>(motion));
+    mode.has_value() ? operation_mode_name(*mode) : "n/a",
+    motion_description(*rcv_iface_).c_str());
 
   // Direct joint control frames only actually drive the arm once the
   // controller is in DirectJointControl; anything else means the commands are
   // being received and ignored.
-  if (motion != kr2::kord::protocol::EMotionState::DirectJointControl)
+  if (const auto direct = in_direct_joint_control(*rcv_iface_); direct.has_value() && !*direct)
   {
     RCLCPP_WARN(
       get_logger(),
