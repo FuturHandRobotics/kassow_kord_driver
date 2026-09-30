@@ -61,7 +61,7 @@
           has_velocity_limits: true
           max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
           has_acceleration_limits: true
-          max_acceleration: 5.25   # 2pi rad/s^2 cap (was 7.5 = 75% of the default preset's 10.0)
+          max_acceleration: 5.0   # 2pi rad/s^2 cap (was 7.5 = 75% of the default preset's 10.0)
           has_jerk_limits: true
           max_jerk: 200.0   # see the JERK LIMITS note in the header
           # 5.25 / 200 = 26 ms of acceleration ramp; the shortest move in the pick
@@ -73,7 +73,7 @@
           has_velocity_limits: true
           max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
           has_acceleration_limits: true
-          max_acceleration: 5.25   # 75% of the default preset's 7.0; already under the 2pi cap
+          max_acceleration: 5.0  # 75% of the default preset's 7.0; already under the 2pi cap
           has_jerk_limits: true
           max_jerk: 200.0
         kassow_joint_3:
@@ -83,7 +83,7 @@
           has_velocity_limits: true
           max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
           has_acceleration_limits: true
-          max_acceleration: 5.25   # 2pi rad/s^2 cap (was 7.5 = 75% of the default preset's 10.0)
+          max_acceleration: 5.0   # 2pi rad/s^2 cap (was 7.5 = 75% of the default preset's 10.0)
           has_jerk_limits: true
           max_jerk: 200.0
         kassow_joint_4:
@@ -93,7 +93,7 @@
           has_velocity_limits: true
           max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
           has_acceleration_limits: true
-          max_acceleration: 5.25   # 2pi rad/s^2 cap (was 7.5 = 75% of the default preset's 10.0)
+          max_acceleration: 5.0   # 2pi rad/s^2 cap (was 7.5 = 75% of the default preset's 10.0)
           has_jerk_limits: true
           max_jerk: 200.0
         kassow_joint_5:
