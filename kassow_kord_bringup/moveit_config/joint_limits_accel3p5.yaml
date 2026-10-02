@@ -1,0 +1,135 @@
+# TEMP 2026-10-02 (elc_pr5y_test): joint_limits_tuned.yaml with J1-J3 max_acceleration lowered from
+# 5.0 to 3.5 rad/s^2 (70%), everything else identical. Three UNDER-VOLTAGE hard faults that day, all
+# at 0.9 scaling and inside these limits, each with several big joints accelerating hard at once
+# (the last: J1 3.6, J2 4.4, J3 3.1 rad/s^2 0.5 s into a GCS leg). Lowers the peak current demand
+# while the power supply is investigated. Selected by elc_pr5y_test's behavior family
+# (mtc_task_runner joint_limits_file); revert there to joint_limits_tuned.yaml when resolved.
+/**:
+  ros__parameters:    # kassow_joint_limits.yaml allows the dynamics properties specified in the URDF to be overwritten or augmented as needed
+    robot_description_planning:
+      # TUNED preset: full default velocity, and acceleration capped at
+      # 2*pi = 6.28319 rad/s^2 per joint (2026-09-29).
+      #
+      # WHY THE CAP. The 75% figure below came from working down from a joint
+      # OVERTORQUE trip on 2026-09-24/25. Running the pick cycle at full scaling
+      # then tripped an UNDER-VOLTAGE fault instead -- a different failure: peak
+      # current draw sagging the supply, rather than a single joint exceeding its
+      # torque. Acceleration is what drives that current, so it is capped
+      # outright here rather than scaled down proportionally.
+      #
+      # THE CAP APPLIES TO THE MAJOR JOINTS ONLY (1, 3, 4). Current goes as
+      # torque, i.e. inertia x acceleration, and joints 1-4 swing the whole arm
+      # while the WRIST (5, 6, 7) carries only the hand. High wrist acceleration
+      # is therefore cheap in current, so those stay at 15.0 rather than being
+      # capped -- capping them would cost cycle time for almost no relief.
+      #
+      # joint_2 was already at 5.25, below the cap, and is left alone.
+      # Original 75%-of-default derivation, kept because it is still the
+      # reference the overtorque testing produced: 100% acceleration
+      # (the full default) trips; 75% holds and is close to what the robot can actually
+      # sustain. Velocity at 100% has run clean alongside it. Do not raise the
+      # acceleration without re-testing on hardware -- 100% is known to fault.
+      # joint_limits_slow.yaml (10% of default) is the gentler preset for the first run
+      # of a new cell, task or layer.
+      #
+      # These bounds are what the MTC stages scale against, so a task YAML's
+      # max_velocity_scaling: 0.1 means 10% OF THESE. Select it per launch with
+      # mtc_task_runner.launch.py's joint_limits_file argument (and
+      # consolidated_moveit_bringup's argument of the same name for move_group).
+      default_velocity_scaling_factor: 1.0
+      default_acceleration_scaling_factor: 0.5
+
+      # JERK LIMITS (2026-09-29). Present so MoveIt's Ruckig pass has a bound to
+      # enforce; without them it cannot run and the fused trajectories go out
+      # jerk-unlimited. THIS IS NOT A DE-RATING -- it fixes a defect in what
+      # actually reaches the robot, and costs only a few percent of cycle time.
+      #
+      # WHY. TOTG leaves acceleration piecewise constant, so a knot interval that
+      # spans one of its switching points describes a kinked motion. The
+      # controller interpolates between knots with a quintic pinned to
+      # (position, velocity, acceleration) at both ends, which cannot represent
+      # that kink and bulges through it. Measured from a 92.7 s / 11-pick
+      # recording: knots correctly clamped at the 5.25 below, but commanded peaks
+      # of 7.36 rad/s^2 on the Cartesian legs (1.40x) and 8.77 on the GCS transits
+      # (1.67x) -- a SUSTAINED ~50 Hz ripple whenever the arm sits at the
+      # acceleration limit, not an isolated spike. Lowering max_acceleration does
+      # NOT help: the bulge scales with it. Under a jerk limit acceleration is
+      # piecewise linear and position piecewise cubic, and a cubic is reproduced
+      # exactly by that quintic, so the bulge disappears.
+
+      # Specific kassow_joint properties can be changed with the keys [max_position, min_position, max_velocity, max_acceleration]
+      # kassow_joint limits can be turned off with [has_velocity_limits, has_acceleration_limits]
+      joint_limits:
+        kassow_joint_1:
+          has_position_limits: true
+          min_position: -6.283  # -360° in radians
+          max_position: 6.283   # +360° in radians
+          has_velocity_limits: true
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
+          has_acceleration_limits: true
+          max_acceleration: 3.5   # TEMP 2026-10-02: 70% of tuned's 5.0 (under-voltage faults)
+          has_jerk_limits: true
+          max_jerk: 200.0   # see the JERK LIMITS note in the header
+          # 5.25 / 200 = 26 ms of acceleration ramp; the shortest move in the pick
+          # cycle is ~270 ms, so the S-curve costs it under 10%.
+        kassow_joint_2:
+          has_position_limits: true
+          min_position: -1.22   # -70° in radians
+          max_position: 3.141   # +180° in radians
+          has_velocity_limits: true
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
+          has_acceleration_limits: true
+          max_acceleration: 3.5   # TEMP 2026-10-02: 70% of tuned's 5.0 (under-voltage faults)
+          has_jerk_limits: true
+          max_jerk: 200.0
+        kassow_joint_3:
+          has_position_limits: true
+          min_position: -6.283  # -360° in radians
+          max_position: 6.283   # +360° in radians
+          has_velocity_limits: true
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
+          has_acceleration_limits: true
+          max_acceleration: 3.5   # TEMP 2026-10-02: 70% of tuned's 5.0 (under-voltage faults)
+          has_jerk_limits: true
+          max_jerk: 200.0
+        kassow_joint_4:
+          has_position_limits: true
+          min_position: -1.22   # -70° in radians
+          max_position: 3.141   # +180° in radians
+          has_velocity_limits: true
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
+          has_acceleration_limits: true
+          max_acceleration: 5.0   # 2pi rad/s^2 cap (was 7.5 = 75% of the default preset's 10.0)
+          has_jerk_limits: true
+          max_jerk: 200.0
+        kassow_joint_5:
+          has_position_limits: true
+          min_position: -6.283  # -360° in radians
+          max_position: 6.283   # +360° in radians
+          has_velocity_limits: true
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
+          has_acceleration_limits: true
+          max_acceleration: 15.0   # 75% of the default preset's 20.0; wrist, left uncapped (see header)
+          has_jerk_limits: true
+          max_jerk: 600.0   # wrist: 15.0 / 600 gives the same 26 ms ramp
+          # as the major joints, so the S-curve extension is uniform across the arm.
+        kassow_joint_6:
+          has_position_limits: true
+          min_position: -6.283  # -360° in radians
+          max_position: 6.283   # +360° in radians
+          has_velocity_limits: true
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
+          has_acceleration_limits: true
+          max_acceleration: 15.0   # 75% of the default preset's 20.0; wrist, left uncapped (see header)
+          has_jerk_limits: true
+          max_jerk: 600.0
+        kassow_joint_7:
+          has_position_limits: true
+          min_position: -6.283  # -360° in radians
+          max_position: 6.283   # +360° in radians
+          has_velocity_limits: true
+          max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
+          has_acceleration_limits: true
+          max_acceleration: 15.0   # 75% of the default preset's 20.0; wrist, left uncapped (see header)
+          has_jerk_limits: true
+          max_jerk: 600.0
