@@ -113,11 +113,30 @@ private:
   std::array<std::string, KORD_JOINT_COUNT> joint_velocity_itfs_;
   std::array<std::string, KORD_JOINT_COUNT> joint_acceleration_itfs_;
   std::array<std::string, KORD_JOINT_COUNT> joint_effort_itfs_;
+  // Optional (only when the URDF declares them; empty name = not exported): the controller's own
+  // model torque (T_REFERENCE_TRQ, the torque its model commands -- what the SoftStop on model torque
+  // limits is checked against) and its effective joint torque limit, so
+  // torque headroom can be watched from ROS (/dynamic_joint_states). Added 2026-10-06 after a
+  // SoftStop on the controller's model torque limits that nothing on the ROS side could see.
+  std::array<std::string, KORD_JOINT_COUNT> joint_model_effort_itfs_;
+  std::array<std::string, KORD_JOINT_COUNT> joint_effort_limit_itfs_;
+  // Optional too: the encoders' sensed position / speed / acceleration (S_SENSED_*), what the
+  // pendant shows. The standard position/velocity/acceleration interfaces (and so /joint_states)
+  // stay the controller's REFERENCE, which MoveIt's start-state checks and the trajectory
+  // controller rely on; these go to /dynamic_joint_states only.
+  std::array<std::string, KORD_JOINT_COUNT> joint_sensed_position_itfs_;
+  std::array<std::string, KORD_JOINT_COUNT> joint_sensed_velocity_itfs_;
+  std::array<std::string, KORD_JOINT_COUNT> joint_sensed_acceleration_itfs_;
 
   std::array<double, KORD_JOINT_COUNT> position_states{};
   std::array<double, KORD_JOINT_COUNT> velocity_states{};
   std::array<double, KORD_JOINT_COUNT> acceleration_states{};
   std::array<double, KORD_JOINT_COUNT> torque_states{};
+  std::array<double, KORD_JOINT_COUNT> model_torque_states{};
+  std::array<double, KORD_JOINT_COUNT> torque_limit_states{};
+  std::array<double, KORD_JOINT_COUNT> sensed_position_states{};
+  std::array<double, KORD_JOINT_COUNT> sensed_velocity_states{};
+  std::array<double, KORD_JOINT_COUNT> sensed_acceleration_states{};
 
   std::array<double, KORD_JOINT_COUNT> position_cmds{};
   std::array<double, KORD_JOINT_COUNT> velocity_cmds{};
