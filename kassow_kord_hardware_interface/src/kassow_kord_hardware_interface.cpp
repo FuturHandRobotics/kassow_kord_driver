@@ -282,13 +282,24 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_init(
       return hardware_interface::CallbackReturn::ERROR;
     }
 
-    // Validate we have four state interface
-    if (joint.state_interfaces.size() != 4)
+    // Validate the state interfaces: the four required ones (checked by name below) plus, optionally,
+    // the diagnostic ones read in read() (model_effort, effort_limit, sensed_*); nothing else.
+    for (const auto & state_interface : joint.state_interfaces)
     {
-      RCLCPP_FATAL(
-        get_logger(), "Joint '%s' state interface invalid. Expected exactly four state interfaces.",
-        joint.name.c_str());
-      return hardware_interface::CallbackReturn::ERROR;
+      static const std::array<const char *, 9> known{
+        hardware_interface::HW_IF_POSITION, hardware_interface::HW_IF_VELOCITY,
+        hardware_interface::HW_IF_ACCELERATION, hardware_interface::HW_IF_EFFORT,
+        "model_effort", "effort_limit", "sensed_position", "sensed_velocity",
+        "sensed_acceleration"};
+      if (std::none_of(known.begin(), known.end(), [&](const char * k) {
+            return state_interface.name == k;
+          }))
+      {
+        RCLCPP_FATAL(
+          get_logger(), "Joint '%s' has unsupported state interface '%s'.", joint.name.c_str(),
+          state_interface.name.c_str());
+        return hardware_interface::CallbackReturn::ERROR;
+      }
     }
 
     // Validate state interfaces
@@ -324,6 +335,29 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_init(
     joint_acceleration_itfs_[joint_index] =
       joint.name + "/" + hardware_interface::HW_IF_ACCELERATION;
     joint_effort_itfs_[joint_index] = joint.name + "/" + hardware_interface::HW_IF_EFFORT;
+    for (const auto & state_interface : joint.state_interfaces)
+    {
+      if (state_interface.name == "model_effort")
+      {
+        joint_model_effort_itfs_[joint_index] = joint.name + "/model_effort";
+      }
+      else if (state_interface.name == "effort_limit")
+      {
+        joint_effort_limit_itfs_[joint_index] = joint.name + "/effort_limit";
+      }
+      else if (state_interface.name == "sensed_position")
+      {
+        joint_sensed_position_itfs_[joint_index] = joint.name + "/sensed_position";
+      }
+      else if (state_interface.name == "sensed_velocity")
+      {
+        joint_sensed_velocity_itfs_[joint_index] = joint.name + "/sensed_velocity";
+      }
+      else if (state_interface.name == "sensed_acceleration")
+      {
+        joint_sensed_acceleration_itfs_[joint_index] = joint.name + "/sensed_acceleration";
+      }
+    }
     joint_index++;
   }
 
@@ -458,6 +492,14 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_activate(
   acceleration_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
+  model_torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_TRQ);
+  torque_limit_states = rcv_iface_->getEffectiveLimitJointTorque();
+  sensed_position_states =
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_POSITIONS);
+  sensed_velocity_states =
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_SPEED);
+  sensed_acceleration_states =
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
 
   for (size_t i = 0; i < KORD_JOINT_COUNT; ++i)
   {
@@ -465,6 +507,26 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_activate(
     set_state(joint_velocity_itfs_[i], velocity_states[i]);
     set_state(joint_acceleration_itfs_[i], acceleration_states[i]);
     set_state(joint_effort_itfs_[i], torque_states[i]);
+    if (!joint_model_effort_itfs_[i].empty())
+    {
+      set_state(joint_model_effort_itfs_[i], model_torque_states[i]);
+    }
+    if (!joint_effort_limit_itfs_[i].empty())
+    {
+      set_state(joint_effort_limit_itfs_[i], torque_limit_states[i]);
+    }
+    if (!joint_sensed_position_itfs_[i].empty())
+    {
+      set_state(joint_sensed_position_itfs_[i], sensed_position_states[i]);
+    }
+    if (!joint_sensed_velocity_itfs_[i].empty())
+    {
+      set_state(joint_sensed_velocity_itfs_[i], sensed_velocity_states[i]);
+    }
+    if (!joint_sensed_acceleration_itfs_[i].empty())
+    {
+      set_state(joint_sensed_acceleration_itfs_[i], sensed_acceleration_states[i]);
+    }
 
     set_command(joint_position_itfs_[i], position_states[i]);
     set_command(joint_velocity_itfs_[i], velocity_states[i]);
@@ -561,6 +623,14 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
   acceleration_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_QDD);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
+  model_torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_TRQ);
+  torque_limit_states = rcv_iface_->getEffectiveLimitJointTorque();
+  sensed_position_states =
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_POSITIONS);
+  sensed_velocity_states =
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_SPEED);
+  sensed_acceleration_states =
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
 
   for (size_t i = 0; i < KORD_JOINT_COUNT; ++i)
   {
@@ -568,6 +638,26 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
     set_state(joint_velocity_itfs_[i], velocity_states[i]);
     set_state(joint_acceleration_itfs_[i], acceleration_states[i]);
     set_state(joint_effort_itfs_[i], torque_states[i]);
+    if (!joint_model_effort_itfs_[i].empty())
+    {
+      set_state(joint_model_effort_itfs_[i], model_torque_states[i]);
+    }
+    if (!joint_effort_limit_itfs_[i].empty())
+    {
+      set_state(joint_effort_limit_itfs_[i], torque_limit_states[i]);
+    }
+    if (!joint_sensed_position_itfs_[i].empty())
+    {
+      set_state(joint_sensed_position_itfs_[i], sensed_position_states[i]);
+    }
+    if (!joint_sensed_velocity_itfs_[i].empty())
+    {
+      set_state(joint_sensed_velocity_itfs_[i], sensed_velocity_states[i]);
+    }
+    if (!joint_sensed_acceleration_itfs_[i].empty())
+    {
+      set_state(joint_sensed_acceleration_itfs_[i], sensed_acceleration_states[i]);
+    }
   }
 
   return hardware_interface::return_type::OK;
