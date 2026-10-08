@@ -487,7 +487,7 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_activate(
   acceleration_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
-  model_torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_TRQ);
+  model_torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_TRQ);
   torque_limit_states = rcv_iface_->getEffectiveLimitJointTorque();
   sensed_position_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_POSITIONS);
@@ -616,7 +616,7 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
   acceleration_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_QDD);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
-  model_torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::T_REFERENCE_TRQ);
+  model_torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_TRQ);
   torque_limit_states = rcv_iface_->getEffectiveLimitJointTorque();
   sensed_position_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_POSITIONS);

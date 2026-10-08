@@ -114,7 +114,7 @@ private:
   std::array<std::string, KORD_JOINT_COUNT> joint_acceleration_itfs_;
   std::array<std::string, KORD_JOINT_COUNT> joint_effort_itfs_;
   // Optional (only when the URDF declares them; empty name = not exported): the controller's own
-  // model torque (T_REFERENCE_TRQ, the torque its model commands -- what the SoftStop on model torque
+  // model torque (S_ACTUAL_TRQ, v4: T_REFERENCE_TRQ, the torque its model commands -- what the SoftStop on model torque
   // limits is checked against) and its effective joint torque limit, so
   // torque headroom can be watched from ROS (/dynamic_joint_states). Added 2026-10-06 after a
   // SoftStop on the controller's model torque limits that nothing on the ROS side could see.
