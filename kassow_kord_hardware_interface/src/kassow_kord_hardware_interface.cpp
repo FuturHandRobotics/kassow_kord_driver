@@ -74,38 +74,11 @@ const char * operation_mode_name(kr2::kord::protocol::EOperationMode v)
   return "?";
 }
 
-const char * motion_state_name(kr2::kord::protocol::EMotionState v)
+// Motion description for log lines. kord-api v3 has no motion state (v4's
+// getMotionState()), only the motion flags.
+std::string motion_description(kr2::kord::ReceiverInterface & rcv)
 {
-  switch (v)
-  {
-    case kr2::kord::protocol::EMotionState::None:
-      return "None";
-    case kr2::kord::protocol::EMotionState::Standstill:
-      return "Standstill";
-    case kr2::kord::protocol::EMotionState::Tracking:
-      return "Tracking";
-    case kr2::kord::protocol::EMotionState::Stopping:
-      return "Stopping";
-    case kr2::kord::protocol::EMotionState::Resuming:
-      return "Resuming";
-    case kr2::kord::protocol::EMotionState::Jogging:
-      return "Jogging";
-    case kr2::kord::protocol::EMotionState::BackDrive:
-      return "BackDrive";
-    case kr2::kord::protocol::EMotionState::DirectJointControl:
-      return "DirectJointControl";
-    case kr2::kord::protocol::EMotionState::VelocityControl:
-      return "VelocityControl";
-    case kr2::kord::protocol::EMotionState::Halting:
-      return "Halting";
-    case kr2::kord::protocol::EMotionState::Halted:
-      return "Halted";
-    case kr2::kord::protocol::EMotionState::Suspended:
-      return "Suspended";
-    case kr2::kord::protocol::EMotionState::Paused:
-      return "Paused";
-  }
-  return "?";
+  return "motion flags " + std::to_string(rcv.getMotionFlags());
 }
 }  // namespace
 
@@ -563,7 +536,8 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
   {
     // An alarm here deactivates the hardware, which takes down the state
     // interfaces and everything downstream -- so say which alarm it was.
-    const kr2::utils::SystemAlarmStateDecoder decoder(alarm_state);
+    // Not const: v3's decodeAsString() isn't a const member.
+    kr2::utils::SystemAlarmStateDecoder decoder(alarm_state);
     const char * severity = decoder.isCritical()      ? "critical"
                             : decoder.isLatched()     ? "latched"
                             : decoder.isRecoverable() ? "recoverable"
@@ -574,7 +548,7 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
       "Alarm detected, deactivating. %s | severity: %s | condition id: %u | motion: %s | safety "
       "flags: %u",
       decoder.decodeAsString().c_str(), severity, decoder.getConditionID(),
-      motion_state_name(rcv_iface_->getMotionState()), rcv_iface_->getRobotSafetyFlags());
+      motion_description(*rcv_iface_).c_str(), rcv_iface_->getRobotSafetyFlags());
 
     for (const auto & event : rcv_iface_->getSystemEvents())
     {
@@ -673,26 +647,9 @@ hardware_interface::return_type KassowKordHardwareInterface::write(
   }
 
   // directJControl() only reports that the frame reached the socket, not that
-  // the controller acted on it. Anything other than DirectJointControl while
-  // we are streaming commands means they are being accepted and discarded --
-  // which looks like success everywhere else, right up to MoveIt reporting a
-  // completed trajectory on an arm that never moved. Silent on the healthy
-  // path; the tracking error is only interesting once that is the case.
-  if (const auto motion = rcv_iface_->getMotionState();
-      motion != kr2::kord::protocol::EMotionState::DirectJointControl)
-  {
-    double max_err = 0.0;
-    for (size_t i = 0; i < KORD_JOINT_COUNT; ++i)
-    {
-      max_err = std::max(max_err, std::abs(position_cmds[i] - position_states[i]));
-    }
-
-    RCLCPP_WARN_THROTTLE(
-      get_logger(), *get_clock(), 2000,
-      "Commanding joints while motion state is %s, not DirectJointControl -- the arm is not "
-      "following these commands (max |cmd-state| = %.5f rad).",
-      motion_state_name(motion), max_err);
-  }
+  // the controller acted on it. v4 checks the motion state for
+  // DirectJointControl here; kord-api v3 reports no motion state, so there is
+  // no such check on this branch.
 
   return hardware_interface::return_type::OK;
 }
@@ -702,24 +659,12 @@ void KassowKordHardwareInterface::log_robot_state(const char * context)
 {
   const auto soc = rcv_iface_->getRobotSourceOfControl();
   const auto mode = rcv_iface_->getRobotOperationMode();
-  const auto motion = rcv_iface_->getMotionState();
 
   RCLCPP_INFO(
-    get_logger(), "[%s] source of control: %s | operation mode: %s | motion state: %s (%d)", context,
+    get_logger(), "[%s] source of control: %s | operation mode: %s | %s", context,
     soc.has_value() ? source_of_control_name(*soc) : "n/a",
-    mode.has_value() ? operation_mode_name(*mode) : "n/a", motion_state_name(motion),
-    static_cast<int>(motion));
-
-  // Direct joint control frames only actually drive the arm once the
-  // controller is in DirectJointControl; anything else means the commands are
-  // being received and ignored.
-  if (motion != kr2::kord::protocol::EMotionState::DirectJointControl)
-  {
-    RCLCPP_WARN(
-      get_logger(),
-      "[%s] controller is not in DirectJointControl -- joint commands will not move the arm.",
-      context);
-  }
+    mode.has_value() ? operation_mode_name(*mode) : "n/a",
+    motion_description(*rcv_iface_).c_str());
 
   if (soc.has_value() && *soc != kr2::kord::protocol::ESourceOfControl::eExternal)
   {
