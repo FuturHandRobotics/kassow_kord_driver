@@ -39,6 +39,8 @@ robot **before** building:
 |---|---|---|
 | `master` | v3.0.1-based | v3 |
 | `feature/kord_v4_beta11` | v4.0.0-beta11 | v4 |
+| `feature/rt_split_v3` | v3.0.2 (RT box: `build_rt_ws` with `KORD_API_VERSION=3.0.2`) | v3, with the `feature/rt_split` work (tool load, threading, limits presets) |
+| `feature/rt_split` | v4.0.0-beta11 | v4 |
 
 **`kassow_kord_vendor` must move with it.** `kassow_kord_hardware_interface`
 depends on the nested `kassow_kord_vendor` package (its own git repo, with
