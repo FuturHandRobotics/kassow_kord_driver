@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <sstream>
 #include <variant>
 
@@ -461,7 +462,10 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_activate(
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
   model_torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_TRQ);
-  torque_limit_states = rcv_iface_->getEffectiveLimitJointTorque();
+  // KORD v3: kord-api 3.0.2 declares getEffectiveLimitJointTorque() but doesn't
+  // implement it (undefined symbol at load), and the v3 robot state has no
+  // joint torque limit. effort_limit is diagnostic only: report no data.
+  torque_limit_states.fill(std::numeric_limits<double>::quiet_NaN());
   sensed_position_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_POSITIONS);
   sensed_velocity_states =
@@ -591,7 +595,10 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_QDD);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
   model_torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_TRQ);
-  torque_limit_states = rcv_iface_->getEffectiveLimitJointTorque();
+  // KORD v3: kord-api 3.0.2 declares getEffectiveLimitJointTorque() but doesn't
+  // implement it (undefined symbol at load), and the v3 robot state has no
+  // joint torque limit. effort_limit is diagnostic only: report no data.
+  torque_limit_states.fill(std::numeric_limits<double>::quiet_NaN());
   sensed_position_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_POSITIONS);
   sensed_velocity_states =
