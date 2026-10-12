@@ -1,6 +1,10 @@
 /**:
   ros__parameters:
     taskspace_birrt:
+      # 2026-10-12: CheckStartStateBounds clamps a start state that is just past a joint limit
+      # instead of refusing every plan (the arm stopped at J2 -1.22014 after a controller
+      # alarm at the -1.22 bound, and nothing could be planned until it was jogged back).
+      fix_start_state: true
       planning_plugins:
         - futur_arm_planners/TaskSpaceBiRRTManager
 
