@@ -68,7 +68,7 @@
           # cycle is ~270 ms, so the S-curve costs it under 10%.
         kassow_joint_2:
           has_position_limits: true
-          min_position: -1.22   # -70° in radians
+          min_position: -1.19   # -68.2 deg (2026-10-12: was -1.22 = -70 deg, the robot's own limit; plans sat on it and tripped the controller)
           max_position: 3.141   # +180° in radians
           has_velocity_limits: true
           max_velocity: 3.926   # 225 deg/s (100% of the default preset's 3.926)
