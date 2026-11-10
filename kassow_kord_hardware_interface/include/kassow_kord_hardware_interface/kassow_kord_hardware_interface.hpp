@@ -23,6 +23,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -94,6 +95,16 @@ public:
 private:
   bool clean_alarms();
 
+  // Logs the controller's reported source of control, operation mode and
+  // motion state. Direct joint control frames are accepted at the protocol
+  // level regardless of these, so when the arm does not move they are the
+  // only way to see why from this side.
+  void log_robot_state(const char * context);
+
+  // Sends the configured end-of-arm tool load (LOAD1) to the controller and
+  // confirms it by reading it back. No-op when load1_mass is not configured.
+  bool apply_tool_load();
+
   std::shared_ptr<kr2::kord::KordCore> kord_;
   std::unique_ptr<kr2::kord::ControlInterface> ctl_iface_;
   std::unique_ptr<kr2::kord::ReceiverInterface> rcv_iface_;
@@ -102,11 +113,30 @@ private:
   std::array<std::string, KORD_JOINT_COUNT> joint_velocity_itfs_;
   std::array<std::string, KORD_JOINT_COUNT> joint_acceleration_itfs_;
   std::array<std::string, KORD_JOINT_COUNT> joint_effort_itfs_;
+  // Optional (only when the URDF declares them; empty name = not exported): the controller's own
+  // model torque (S_ACTUAL_TRQ, v4: T_REFERENCE_TRQ, the torque its model commands -- what the SoftStop on model torque
+  // limits is checked against) and its effective joint torque limit, so
+  // torque headroom can be watched from ROS (/dynamic_joint_states). Added 2026-10-06 after a
+  // SoftStop on the controller's model torque limits that nothing on the ROS side could see.
+  std::array<std::string, KORD_JOINT_COUNT> joint_model_effort_itfs_;
+  std::array<std::string, KORD_JOINT_COUNT> joint_effort_limit_itfs_;
+  // Optional too: the encoders' sensed position / speed / acceleration (S_SENSED_*), what the
+  // pendant shows. The standard position/velocity/acceleration interfaces (and so /joint_states)
+  // stay the controller's REFERENCE, which MoveIt's start-state checks and the trajectory
+  // controller rely on; these go to /dynamic_joint_states only.
+  std::array<std::string, KORD_JOINT_COUNT> joint_sensed_position_itfs_;
+  std::array<std::string, KORD_JOINT_COUNT> joint_sensed_velocity_itfs_;
+  std::array<std::string, KORD_JOINT_COUNT> joint_sensed_acceleration_itfs_;
 
   std::array<double, KORD_JOINT_COUNT> position_states{};
   std::array<double, KORD_JOINT_COUNT> velocity_states{};
   std::array<double, KORD_JOINT_COUNT> acceleration_states{};
   std::array<double, KORD_JOINT_COUNT> torque_states{};
+  std::array<double, KORD_JOINT_COUNT> model_torque_states{};
+  std::array<double, KORD_JOINT_COUNT> torque_limit_states{};
+  std::array<double, KORD_JOINT_COUNT> sensed_position_states{};
+  std::array<double, KORD_JOINT_COUNT> sensed_velocity_states{};
+  std::array<double, KORD_JOINT_COUNT> sensed_acceleration_states{};
 
   std::array<double, KORD_JOINT_COUNT> position_cmds{};
   std::array<double, KORD_JOINT_COUNT> velocity_cmds{};
@@ -116,6 +146,20 @@ private:
   int session_id;
   int port;
   int waitSync_timeout_ms;
+
+  // Overrides for the CBun's QOC_HALT_TRIGGER thresholds, sent at connect
+  // time. Each is opt-in: 0 leaves that field of the controller's own
+  // configuration alone.
+  int qoc_max_jitter_us;                 // avg/max system jitter, roundtrip, cmd jitter (us)
+  int qoc_max_recent_commands_lost;      // lost commands per 0.2 s window (50 ticks)
+  int qoc_max_consecutive_commands_lost; // consecutive lost commands
+
+  // End-of-arm tool load (KORD LOAD1: mass [kg], CoG [m] and inertia [kg m^2]
+  // in the tool flange frame), sent on activation so the controller's torque
+  // model includes the hand. Unset: the controller's own LOAD1 is left alone.
+  std::optional<double> load1_mass;
+  std::array<double, 3> load1_cog{};
+  std::array<double, 6> load1_inertia{};
 };
 
 }  // namespace kassow_kord_hardware_interface

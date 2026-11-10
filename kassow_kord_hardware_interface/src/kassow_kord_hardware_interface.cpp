@@ -12,6 +12,13 @@
 
 #include "kassow_kord_hardware_interface/kassow_kord_hardware_interface.hpp"
 
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <limits>
+#include <sstream>
+#include <variant>
+
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 
@@ -23,9 +30,59 @@
  *   - port (int, required): Port number for Kord connection.
  *   - session_id (int, required): Kord session ID.
  *   - waitSync_timeout_ms (int, required): Kord session ID.
+ *   - load1_mass (double, optional): end-of-arm tool mass [kg], sent as KORD LOAD1 on
+ *     activation and confirmed by readback. Unset leaves the controller's LOAD1 alone.
+ *   - load1_cog (3 doubles, optional): tool centre of gravity [m], tool flange frame.
+ *   - load1_inertia (6 doubles, optional): tool inertia xx yy zz xy xz yz [kg m^2].
  */
 namespace kassow_kord_hardware_interface
 {
+namespace
+{
+const char * source_of_control_name(kr2::kord::protocol::ESourceOfControl v)
+{
+  switch (v)
+  {
+    case kr2::kord::protocol::ESourceOfControl::eUnknown:
+      return "Unknown";
+    case kr2::kord::protocol::ESourceOfControl::eDirect:
+      return "Direct (local/pendant)";
+    case kr2::kord::protocol::ESourceOfControl::eExternal:
+      return "External (KORD)";
+  }
+  return "?";
+}
+
+const char * operation_mode_name(kr2::kord::protocol::EOperationMode v)
+{
+  switch (v)
+  {
+    case kr2::kord::protocol::EOperationMode::eUnknown:
+      return "Unknown";
+    case kr2::kord::protocol::EOperationMode::eManualReduced:
+      return "ManualReduced";
+    case kr2::kord::protocol::EOperationMode::eManualHigh:
+      return "ManualHigh";
+    case kr2::kord::protocol::EOperationMode::eAutomatic:
+      return "Automatic";
+    case kr2::kord::protocol::EOperationMode::eRecovery:
+      return "Recovery";
+    case kr2::kord::protocol::EOperationMode::eOffline:
+      return "Offline";
+    case kr2::kord::protocol::EOperationMode::eMaintenance:
+      return "Maintenance";
+  }
+  return "?";
+}
+
+// Motion description for log lines. kord-api v3 has no motion state (v4's
+// getMotionState()), only the motion flags.
+std::string motion_description(kr2::kord::ReceiverInterface & rcv)
+{
+  return "motion flags " + std::to_string(rcv.getMotionFlags());
+}
+}  // namespace
+
 hardware_interface::CallbackReturn KassowKordHardwareInterface::on_init(
   const hardware_interface::HardwareComponentInterfaceParams & params)
 {
@@ -79,6 +136,78 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_init(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
+  // Optional overrides for the CBun's QOC_HALT_TRIGGER thresholds. When one is
+  // exceeded the controller soft-stops with condition 3001
+  // (CBUN_KORD_BAD_CONN_QUALITY) and this component deactivates.
+  //
+  // Kassow's reference client is a PREEMPT_RT kernel at RT priority 99 with
+  // the control loop pinned to dedicated cores; on a stock kernel sharing the
+  // machine with RViz and move_group, a ~20-30 ms scheduling stall is routine.
+  // At 250 Hz that is 5-8 consecutive ticks with no command, which the stock
+  // on_recent_commands_lost = 5 treats as a lost connection. Measured jitter
+  // here was 1-8 us -- well inside even the stock limits -- so the lost-frame
+  // thresholds are the ones that matter; the jitter ceiling is kept as
+  // headroom. Kassow describe KORD as soft real-time where "occasional
+  // deviations are tolerable", and the arm holds position across a gap.
+  //
+  // Defaults tolerate a ~100 ms stall (25 ticks) while still halting on a real
+  // dropout, which loses the whole 50-tick window. 0 leaves that field of the
+  // controller's own configuration alone.
+  const auto optional_int = [&hw_params](const char * name, int fallback) {
+    const auto it = hw_params.find(name);
+    return it != hw_params.end() ? std::stoi(it->second) : fallback;
+  };
+  qoc_max_jitter_us = optional_int("qoc_max_jitter_us", 5000000);
+  qoc_max_recent_commands_lost = optional_int("qoc_max_recent_commands_lost", 25);
+  qoc_max_consecutive_commands_lost = optional_int("qoc_max_consecutive_commands_lost", 25);
+
+  // Optional end-of-arm tool load (LOAD1). Values are "x y z" / "xx yy zz xy xz yz"
+  // (commas, spaces and brackets all accepted), in the tool flange frame.
+  const auto parse_list = [this, &hw_params](const char * name, double * out, size_t n) {
+    const auto it = hw_params.find(name);
+    if (it == hw_params.end() || it->second.empty())
+    {
+      return true;
+    }
+    std::string text = it->second;
+    for (char & ch : text)
+    {
+      if (ch == ',' || ch == '[' || ch == ']')
+      {
+        ch = ' ';
+      }
+    }
+    std::istringstream in(text);
+    size_t count = 0;
+    double value;
+    while (in >> value)
+    {
+      if (count < n)
+      {
+        out[count] = value;
+      }
+      ++count;
+    }
+    if (count != n)
+    {
+      RCLCPP_FATAL(
+        get_logger(), "Parameter '%s' needs %zu values, got %zu ('%s')", name, n, count,
+        it->second.c_str());
+      return false;
+    }
+    return true;
+  };
+  if (const auto it = hw_params.find("load1_mass"); it != hw_params.end() && !it->second.empty())
+  {
+    load1_mass = std::stod(it->second);
+    if (
+      !parse_list("load1_cog", load1_cog.data(), load1_cog.size()) ||
+      !parse_list("load1_inertia", load1_inertia.data(), load1_inertia.size()))
+    {
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+  }
+
   if (info_.joints.size() != KORD_JOINT_COUNT)
   {
     RCLCPP_FATAL(
@@ -127,13 +256,24 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_init(
       return hardware_interface::CallbackReturn::ERROR;
     }
 
-    // Validate we have four state interface
-    if (joint.state_interfaces.size() != 4)
+    // Validate the state interfaces: the four required ones (checked by name below) plus, optionally,
+    // the diagnostic ones read in read() (model_effort, effort_limit, sensed_*); nothing else.
+    for (const auto & state_interface : joint.state_interfaces)
     {
-      RCLCPP_FATAL(
-        get_logger(), "Joint '%s' state interface invalid. Expected exactly four state interfaces.",
-        joint.name.c_str());
-      return hardware_interface::CallbackReturn::ERROR;
+      static const std::array<const char *, 9> known{
+        hardware_interface::HW_IF_POSITION, hardware_interface::HW_IF_VELOCITY,
+        hardware_interface::HW_IF_ACCELERATION, hardware_interface::HW_IF_EFFORT,
+        "model_effort", "effort_limit", "sensed_position", "sensed_velocity",
+        "sensed_acceleration"};
+      if (std::none_of(known.begin(), known.end(), [&](const char * k) {
+            return state_interface.name == k;
+          }))
+      {
+        RCLCPP_FATAL(
+          get_logger(), "Joint '%s' has unsupported state interface '%s'.", joint.name.c_str(),
+          state_interface.name.c_str());
+        return hardware_interface::CallbackReturn::ERROR;
+      }
     }
 
     // Validate state interfaces
@@ -169,6 +309,29 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_init(
     joint_acceleration_itfs_[joint_index] =
       joint.name + "/" + hardware_interface::HW_IF_ACCELERATION;
     joint_effort_itfs_[joint_index] = joint.name + "/" + hardware_interface::HW_IF_EFFORT;
+    for (const auto & state_interface : joint.state_interfaces)
+    {
+      if (state_interface.name == "model_effort")
+      {
+        joint_model_effort_itfs_[joint_index] = joint.name + "/model_effort";
+      }
+      else if (state_interface.name == "effort_limit")
+      {
+        joint_effort_limit_itfs_[joint_index] = joint.name + "/effort_limit";
+      }
+      else if (state_interface.name == "sensed_position")
+      {
+        joint_sensed_position_itfs_[joint_index] = joint.name + "/sensed_position";
+      }
+      else if (state_interface.name == "sensed_velocity")
+      {
+        joint_sensed_velocity_itfs_[joint_index] = joint.name + "/sensed_velocity";
+      }
+      else if (state_interface.name == "sensed_acceleration")
+      {
+        joint_sensed_acceleration_itfs_[joint_index] = joint.name + "/sensed_acceleration";
+      }
+    }
     joint_index++;
   }
 
@@ -208,7 +371,55 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_configure(
   RCLCPP_INFO(
     get_logger(), "Connecting to Kassow Kord robot at ip %s | port %d | session id %d",
     ip_address.c_str(), port, session_id);
-  if (!kord_->connect())
+
+  // KORDConfig serializes only the fields that are set, so each override below
+  // touches one threshold and leaves the rest of the controller's configuration
+  // alone. The connect(KORDConfig) overload sends it after connecting and waits
+  // until the controller has applied it.
+  kr2::kord::protocol::KORDConfig config;
+  bool any_override = false;
+
+  if (qoc_max_jitter_us > 0)
+  {
+    const auto limit = static_cast<uint32_t>(qoc_max_jitter_us);
+    config.setMaxRecentAvgSystemJitterUs(limit)
+      .setMaxRecentMaxSystemJitterUs(limit)
+      .setMaxRecentAvgRoundtripTimeUs(limit)
+      .setMaxRecentAvgCmdJitterUs(limit);
+    RCLCPP_INFO(get_logger(), "QOC halt trigger: jitter/roundtrip ceiling -> %u us", limit);
+    any_override = true;
+  }
+
+  if (qoc_max_recent_commands_lost > 0)
+  {
+    const auto limit = static_cast<uint32_t>(qoc_max_recent_commands_lost);
+    config.setMaxRecentCommandsLost(limit);
+    RCLCPP_INFO(
+      get_logger(), "QOC halt trigger: lost commands per 0.2 s window -> %u (stock 5)", limit);
+    any_override = true;
+  }
+
+  if (qoc_max_consecutive_commands_lost > 0)
+  {
+    const auto limit = static_cast<uint32_t>(qoc_max_consecutive_commands_lost);
+    config.setMaxConsecutiveCommandsLost(limit);
+    RCLCPP_INFO(
+      get_logger(), "QOC halt trigger: consecutive lost commands -> %u (stock 2)", limit);
+    any_override = true;
+  }
+
+  bool connected = false;
+  if (any_override)
+  {
+    connected = kord_->connect(config);
+  }
+  else
+  {
+    RCLCPP_INFO(get_logger(), "Using the controller's own connection-quality configuration");
+    connected = kord_->connect();
+  }
+
+  if (!connected)
   {
     RCLCPP_FATAL(get_logger(), "Failed to connect to Kassow Kord robot.");
     return hardware_interface::CallbackReturn::ERROR;
@@ -236,6 +447,13 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_activate(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
+  // Tool load before any command goes out: the controller's torque model (and
+  // its over-torque monitoring) must include the hand from the first cycle.
+  if (!apply_tool_load())
+  {
+    return hardware_interface::CallbackReturn::ERROR;
+  }
+
   // Read initial joint positions and set them as the initial command values
   rcv_iface_->fetchData();
   position_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_Q);
@@ -243,6 +461,17 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_activate(
   acceleration_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
+  model_torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_TRQ);
+  // KORD v3: kord-api 3.0.2 declares getEffectiveLimitJointTorque() but doesn't
+  // implement it (undefined symbol at load), and the v3 robot state has no
+  // joint torque limit. effort_limit is diagnostic only: report no data.
+  torque_limit_states.fill(std::numeric_limits<double>::quiet_NaN());
+  sensed_position_states =
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_POSITIONS);
+  sensed_velocity_states =
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_SPEED);
+  sensed_acceleration_states =
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
 
   for (size_t i = 0; i < KORD_JOINT_COUNT; ++i)
   {
@@ -250,11 +479,39 @@ hardware_interface::CallbackReturn KassowKordHardwareInterface::on_activate(
     set_state(joint_velocity_itfs_[i], velocity_states[i]);
     set_state(joint_acceleration_itfs_[i], acceleration_states[i]);
     set_state(joint_effort_itfs_[i], torque_states[i]);
+    if (!joint_model_effort_itfs_[i].empty())
+    {
+      set_state(joint_model_effort_itfs_[i], model_torque_states[i]);
+    }
+    if (!joint_effort_limit_itfs_[i].empty())
+    {
+      set_state(joint_effort_limit_itfs_[i], torque_limit_states[i]);
+    }
+    if (!joint_sensed_position_itfs_[i].empty())
+    {
+      set_state(joint_sensed_position_itfs_[i], sensed_position_states[i]);
+    }
+    if (!joint_sensed_velocity_itfs_[i].empty())
+    {
+      set_state(joint_sensed_velocity_itfs_[i], sensed_velocity_states[i]);
+    }
+    if (!joint_sensed_acceleration_itfs_[i].empty())
+    {
+      set_state(joint_sensed_acceleration_itfs_[i], sensed_acceleration_states[i]);
+    }
 
     set_command(joint_position_itfs_[i], position_states[i]);
     set_command(joint_velocity_itfs_[i], velocity_states[i]);
     set_command(joint_acceleration_itfs_[i], acceleration_states[i]);
   }
+
+  log_robot_state("on_activate");
+
+  RCLCPP_INFO(
+    get_logger(), "Initial joint positions [rad]: %.4f %.4f %.4f %.4f %.4f %.4f %.4f",
+    position_states[0], position_states[1], position_states[2], position_states[3],
+    position_states[4], position_states[5], position_states[6]);
+
   RCLCPP_INFO(get_logger(), "Successfully activated!");
 
   return hardware_interface::CallbackReturn::SUCCESS;
@@ -279,9 +536,56 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
 
   rcv_iface_->fetchData();
 
-  if (rcv_iface_->systemAlarmState())
+  if (const auto alarm_state = rcv_iface_->systemAlarmState(); alarm_state != 0)
   {
-    RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 2000, "Alarm detected, deactivating...");
+    // An alarm here deactivates the hardware, which takes down the state
+    // interfaces and everything downstream -- so say which alarm it was.
+    // Not const: v3's decodeAsString() isn't a const member.
+    kr2::utils::SystemAlarmStateDecoder decoder(alarm_state);
+    const char * severity = decoder.isCritical()      ? "critical"
+                            : decoder.isLatched()     ? "latched"
+                            : decoder.isRecoverable() ? "recoverable"
+                                                      : "unspecified";
+
+    RCLCPP_ERROR_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "Alarm detected, deactivating. %s | severity: %s | condition id: %u | motion: %s | safety "
+      "flags: %u",
+      decoder.decodeAsString().c_str(), severity, decoder.getConditionID(),
+      motion_description(*rcv_iface_).c_str(), rcv_iface_->getRobotSafetyFlags());
+
+    for (const auto & event : rcv_iface_->getSystemEvents())
+    {
+      RCLCPP_ERROR_THROTTLE(
+        get_logger(), *get_clock(), 2000, "  system event: group %u, id %u",
+        static_cast<unsigned int>(event.event_group_), static_cast<unsigned int>(event.event_id_));
+    }
+
+    // Condition 3001 (CBUN_KORD_BAD_CONN_QUALITY) means one of the CBun's
+    // QOC_HALT_TRIGGER thresholds was exceeded, but not which. These are the
+    // controller's own statistics, and each maps onto one of those thresholds,
+    // so they say whether it tripped on lost commands or on jitter/roundtrip.
+    const auto stats = rcv_iface_->getStatisticsStructure();
+    RCLCPP_ERROR_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "  cmd lost (seq): window %ld global %ld | cmd lost (timestamp): window %ld global %ld",
+      static_cast<long>(stats.cmd_lost_window_seq), static_cast<long>(stats.cmd_lost_global_seq),
+      static_cast<long>(stats.cmd_lost_window_timestmp),
+      static_cast<long>(stats.cmd_lost_global_timestmp));
+    RCLCPP_ERROR_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "  system jitter us: window avg %d max %d, global max %d | roundtrip us: window avg %ld max "
+      "%ld, global max %ld | cmd jitter us: window avg %ld max %ld",
+      stats.system_jitter_window_avg, stats.system_jitter_window_max,
+      stats.system_jitter_global_max, static_cast<long>(stats.round_trip_window_avg),
+      static_cast<long>(stats.round_trip_window_max),
+      static_cast<long>(stats.round_trip_global_max),
+      static_cast<long>(stats.cmd_jitter_window_avg),
+      static_cast<long>(stats.cmd_jitter_window_max));
+    RCLCPP_ERROR_THROTTLE(
+      get_logger(), *get_clock(), 2000, "  socket read failures: empty %u, error %u",
+      stats.fail_to_read_empty, stats.fail_to_read_error);
+
     return hardware_interface::return_type::ERROR;
   }
 
@@ -290,6 +594,17 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
   acceleration_states =
     rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_QDD);
   torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_TRQ);
+  model_torque_states = rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_ACTUAL_TRQ);
+  // KORD v3: kord-api 3.0.2 declares getEffectiveLimitJointTorque() but doesn't
+  // implement it (undefined symbol at load), and the v3 robot state has no
+  // joint torque limit. effort_limit is diagnostic only: report no data.
+  torque_limit_states.fill(std::numeric_limits<double>::quiet_NaN());
+  sensed_position_states =
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_POSITIONS);
+  sensed_velocity_states =
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_SPEED);
+  sensed_acceleration_states =
+    rcv_iface_->getJoint(kr2::kord::ReceiverInterface::EJointValue::S_SENSED_ACCELERATIONS);
 
   for (size_t i = 0; i < KORD_JOINT_COUNT; ++i)
   {
@@ -297,6 +612,26 @@ hardware_interface::return_type KassowKordHardwareInterface::read(
     set_state(joint_velocity_itfs_[i], velocity_states[i]);
     set_state(joint_acceleration_itfs_[i], acceleration_states[i]);
     set_state(joint_effort_itfs_[i], torque_states[i]);
+    if (!joint_model_effort_itfs_[i].empty())
+    {
+      set_state(joint_model_effort_itfs_[i], model_torque_states[i]);
+    }
+    if (!joint_effort_limit_itfs_[i].empty())
+    {
+      set_state(joint_effort_limit_itfs_[i], torque_limit_states[i]);
+    }
+    if (!joint_sensed_position_itfs_[i].empty())
+    {
+      set_state(joint_sensed_position_itfs_[i], sensed_position_states[i]);
+    }
+    if (!joint_sensed_velocity_itfs_[i].empty())
+    {
+      set_state(joint_sensed_velocity_itfs_[i], sensed_velocity_states[i]);
+    }
+    if (!joint_sensed_acceleration_itfs_[i].empty())
+    {
+      set_state(joint_sensed_acceleration_itfs_[i], sensed_acceleration_states[i]);
+    }
   }
 
   return hardware_interface::return_type::OK;
@@ -318,63 +653,183 @@ hardware_interface::return_type KassowKordHardwareInterface::write(
     return hardware_interface::return_type::ERROR;
   }
 
+  // directJControl() only reports that the frame reached the socket, not that
+  // the controller acted on it. v4 checks the motion state for
+  // DirectJointControl here; kord-api v3 reports no motion state, so there is
+  // no such check on this branch.
+
   return hardware_interface::return_type::OK;
 }
 
-// clean all alarms
-bool KassowKordHardwareInterface::clean_alarms()
+
+void KassowKordHardwareInterface::log_robot_state(const char * context)
 {
-  rcv_iface_->fetchData();
+  const auto soc = rcv_iface_->getRobotSourceOfControl();
+  const auto mode = rcv_iface_->getRobotOperationMode();
 
-  if (rcv_iface_->systemAlarmState())
+  RCLCPP_INFO(
+    get_logger(), "[%s] source of control: %s | operation mode: %s | %s", context,
+    soc.has_value() ? source_of_control_name(*soc) : "n/a",
+    mode.has_value() ? operation_mode_name(*mode) : "n/a",
+    motion_description(*rcv_iface_).c_str());
+
+  if (soc.has_value() && *soc != kr2::kord::protocol::ESourceOfControl::eExternal)
   {
-    unsigned int motion_flags = rcv_iface_->getMotionFlags();
-    unsigned int safety_flags = rcv_iface_->getRobotSafetyFlags();
+    RCLCPP_WARN(
+      get_logger(), "[%s] robot is not under External (KORD) control -- commands will be ignored.",
+      context);
+  }
+}
 
-    // If nothing to clear, early exit
-    if (motion_flags == 0 && safety_flags == 0)
+// clean all alarms
+bool KassowKordHardwareInterface::apply_tool_load()
+{
+  if (!load1_mass)
+  {
+    RCLCPP_INFO(get_logger(), "No load1_mass configured; leaving the controller's LOAD1 as is.");
+    return true;
+  }
+
+  const double mass = *load1_mass;
+  RCLCPP_INFO(
+    get_logger(),
+    "Setting LOAD1 (end-of-arm tool): mass %.3f kg, CoG [%.4f %.4f %.4f] m, "
+    "inertia [%.5f %.5f %.5f %.5f %.5f %.5f] kg m^2",
+    mass, load1_cog[0], load1_cog[1], load1_cog[2], load1_inertia[0], load1_inertia[1],
+    load1_inertia[2], load1_inertia[3], load1_inertia[4], load1_inertia[5]);
+
+  int64_t token = -1;
+  if (!ctl_iface_->setLoad(kr2::kord::LOAD1, mass, load1_cog, load1_inertia, token))
+  {
+    RCLCPP_FATAL(get_logger(), "Failed to send the LOAD1 command.");
+    return false;
+  }
+
+  // Same bounded wait as clean_alarms(): poll the command status per frame.
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  int8_t status = -1;
+  while (status == -1 && std::chrono::steady_clock::now() < deadline)
+  {
+    if (!kord_->waitSync(std::chrono::seconds(1)))
     {
-      RCLCPP_INFO(get_logger(), "No errors.");
+      continue;
     }
+    rcv_iface_->fetchData();
+    status = rcv_iface_->getCommandStatus(token);
+  }
+  RCLCPP_INFO(get_logger(), "LOAD1 command status: %d", static_cast<int>(status));
 
-    RCLCPP_INFO(get_logger(), "Motion flags: %d", motion_flags);
-    RCLCPP_INFO(get_logger(), "Robot safety flags: %d", safety_flags);
-
-    if (safety_flags & SafetyFlags::SAFETY_FLAG_USER_CONF_REQ)
+  // The command status is advisory; what matters is what the controller now
+  // holds. Read it back (a few frames, the status update can lag the ack).
+  const auto as_double = [](const std::variant<double, int> & v) {
+    return std::holds_alternative<double>(v) ? std::get<double>(v)
+                                             : static_cast<double>(std::get<int>(v));
+  };
+  double read_mass = std::numeric_limits<double>::quiet_NaN();
+  std::vector<std::variant<double, int>> read_cog;
+  for (int attempt = 0; attempt < 50; ++attempt)
+  {
+    if (kord_->waitSync(std::chrono::milliseconds(100)))
     {
-      RCLCPP_ERROR(get_logger(), "Errors cannot be cleared. User confirmation required.");
+      rcv_iface_->fetchData();
     }
-
-    const bool is_halt = motion_flags & MotionFlags::MOTION_FLAG_HALT;
-    const bool is_pstop = safety_flags & SafetyFlags::SAFETY_FLAG_PSTOP;
-
-    if (is_halt && is_pstop)
+    const auto m = rcv_iface_->getLoad(kr2::kord::LOAD1, kr2::kord::MASS_VAL);
+    if (!m.empty())
     {
-      RCLCPP_ERROR(get_logger(), "Halt Error.");
-    }
-
-    if (motion_flags & MotionFlags::MOTION_FLAG_SUSPENDED)
-    {
-      RCLCPP_ERROR(get_logger(), "Suspend Error.");
-    }
-
-    bool is_cbun = rcv_iface_->systemAlarmState() & kr2::kord::protocol::CAT_CBUN_EVENT;
-
-    // Check for KORD event
-    const auto system_events = rcv_iface_->getSystemEvents();
-    for (auto & event : system_events)
-    {
-      if (event.event_group_ == kr2::kord::protocol::eKordEvent)
+      read_mass = as_double(m.front());
+      read_cog = rcv_iface_->getLoad(kr2::kord::LOAD1, kr2::kord::COG_VAL);
+      if (std::abs(read_mass - mass) < 1e-3)
       {
-        is_cbun = true;
         break;
       }
     }
+  }
 
-    if (is_cbun)
+  if (std::isnan(read_mass) || std::abs(read_mass - mass) >= 1e-3)
+  {
+    RCLCPP_FATAL(
+      get_logger(),
+      "Controller reports LOAD1 mass %.4f kg after setting %.4f kg; refusing to run with a "
+      "torque model that does not include the tool.",
+      read_mass, mass);
+    return false;
+  }
+
+  if (read_cog.size() >= 3)
+  {
+    RCLCPP_INFO(
+      get_logger(), "LOAD1 confirmed by the controller: mass %.3f kg, CoG [%.4f %.4f %.4f] m",
+      read_mass, as_double(read_cog[0]), as_double(read_cog[1]), as_double(read_cog[2]));
+  }
+  else
+  {
+    RCLCPP_INFO(get_logger(), "LOAD1 confirmed by the controller: mass %.3f kg", read_mass);
+  }
+  return true;
+}
+
+bool KassowKordHardwareInterface::clean_alarms()
+{
+  // fetchStatus() waits for a fresh status update from the controller and then
+  // copies it into the state structures; fetchData() alone only copies whatever
+  // was last captured. Right after connect() that can still be empty, which
+  // would make a robot with a live alarm look clean (or vice versa).
+  if (!rcv_iface_->fetchStatus())
+  {
+    RCLCPP_WARN(get_logger(), "Could not fetch a fresh status; using last known state.");
+    rcv_iface_->fetchData();
+  }
+
+  const auto alarm_state = rcv_iface_->systemAlarmState();
+
+  // Nothing to clear. Sending clear requests anyway means blocking on an
+  // acknowledgement the controller has no reason to send.
+  if (alarm_state == 0)
+  {
+    RCLCPP_INFO(get_logger(), "No alarms to clear.");
+    return true;
+  }
+
+  unsigned int motion_flags = rcv_iface_->getMotionFlags();
+  unsigned int safety_flags = rcv_iface_->getRobotSafetyFlags();
+
+  RCLCPP_INFO(get_logger(), "Motion flags: %d", motion_flags);
+  RCLCPP_INFO(get_logger(), "Robot safety flags: %d", safety_flags);
+
+  if (safety_flags & SafetyFlags::SAFETY_FLAG_USER_CONF_REQ)
+  {
+    RCLCPP_ERROR(get_logger(), "Errors cannot be cleared. User confirmation required.");
+  }
+
+  const bool is_halt = motion_flags & MotionFlags::MOTION_FLAG_HALT;
+  const bool is_pstop = safety_flags & SafetyFlags::SAFETY_FLAG_PSTOP;
+
+  if (is_halt && is_pstop)
+  {
+    RCLCPP_ERROR(get_logger(), "Halt Error.");
+  }
+
+  if (motion_flags & MotionFlags::MOTION_FLAG_SUSPENDED)
+  {
+    RCLCPP_ERROR(get_logger(), "Suspend Error.");
+  }
+
+  bool is_cbun = alarm_state & kr2::kord::protocol::CAT_CBUN_EVENT;
+
+  // Check for KORD event
+  const auto system_events = rcv_iface_->getSystemEvents();
+  for (auto & event : system_events)
+  {
+    if (event.event_group_ == kr2::kord::protocol::eKordEvent)
     {
-      RCLCPP_ERROR(get_logger(), "CBun Error.");
+      is_cbun = true;
+      break;
     }
+  }
+
+  if (is_cbun)
+  {
+    RCLCPP_ERROR(get_logger(), "CBun Error.");
   }
 
   // clear errors
@@ -383,6 +838,13 @@ bool KassowKordHardwareInterface::clean_alarms()
     {kr2::kord::ControlInterface::EClearRequest::CBUN_EVENT, "CBUN_EVENT"},
     {kr2::kord::ControlInterface::EClearRequest::CONTINUE_INIT, "CONTINUE_INIT"},
     {kr2::kord::ControlInterface::EClearRequest::UNSUSPEND, "UNSUSPEND"}};
+
+  // Bound how long we wait for each acknowledgement. kord-api's own request
+  // flows (KordCore::waitForResponse) poll with waitSync(1s) and no
+  // F_SYNC_FULL_ROTATION; requiring a complete frame-id rotation inside 10 ms
+  // and aborting on the first miss -- as this used to -- turns an unacked
+  // command into a failed activation, which takes down ros2_control_node.
+  constexpr auto ack_timeout = std::chrono::seconds(5);
 
   for (const auto & kv : commands_mapped)
   {
@@ -393,28 +855,53 @@ bool KassowKordHardwareInterface::clean_alarms()
     RCLCPP_INFO(
       get_logger(), "%s command sent with token: %ld", name.c_str(), static_cast<int64_t>(token));
 
-    // Poll for command status -- blocking
-    while (rcv_iface_->getCommandStatus(token) == -1)
+    const auto deadline = std::chrono::steady_clock::now() + ack_timeout;
+    int8_t status = -1;
+
+    while (std::chrono::steady_clock::now() < deadline)
     {
-      if (!kord_->waitSync(std::chrono::milliseconds(10), kr2::kord::F_SYNC_FULL_ROTATION))
+      if (!kord_->waitSync(std::chrono::seconds(1)))
       {
-        RCLCPP_ERROR(get_logger(), "Sync wait timed out, exiting.");
-        return false;
+        RCLCPP_WARN(get_logger(), "%s: sync wait failed while awaiting ack.", name.c_str());
+        continue;
       }
 
       rcv_iface_->fetchData();
+
+      status = rcv_iface_->getCommandStatus(token);
+      if (status != -1)
+      {
+        break;
+      }
     }
 
-    // Retrieve and log the command status
-    auto status = rcv_iface_->getCommandStatus(token);
     if (status != -1)
     {
       RCLCPP_INFO(get_logger(), "%s command status: %d", name.c_str(), static_cast<int>(status));
     }
     else
     {
-      RCLCPP_WARN(get_logger(), "%s command status remains unknown.", name.c_str());
-      return false;
+      RCLCPP_WARN(
+        get_logger(), "%s: no command status within %lds; continuing.", name.c_str(),
+        static_cast<long>(ack_timeout.count()));
+    }
+  }
+
+  // The acknowledgements above are advisory -- what actually matters is whether
+  // the alarm state went away. Report that explicitly rather than assuming the
+  // clears took effect because the commands were sent.
+  if (rcv_iface_->fetchStatus())
+  {
+    const auto remaining = rcv_iface_->systemAlarmState();
+    if (remaining != 0)
+    {
+      RCLCPP_WARN(
+        get_logger(), "Alarm state still set after clear attempts: 0x%x",
+        static_cast<unsigned int>(remaining));
+    }
+    else
+    {
+      RCLCPP_INFO(get_logger(), "Alarm state cleared.");
     }
   }
 

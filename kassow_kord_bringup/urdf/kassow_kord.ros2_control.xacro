@@ -9,12 +9,26 @@
                       port:=28283
                       session_id:=1
                       waitSync_timeout_ms:=8
-                      scheduling_policy:=detached"
+                      scheduling_policy:=detached
+                      is_async:=true
+                      rw_rate:=250
+                      thread_priority:=80
+                      load1_mass:=''
+                      load1_cog:=''
+                      load1_inertia:=''"
                       >
 
-    <ros2_control name="${name}" type="system" is_async="true" rw_rate="250">
+    <!-- is_async=false runs read()/write() in the controller manager's own RT
+         thread, paced by KORD waitSync; true moves them to a separate thread. -->
+    <ros2_control name="${name}" type="system" is_async="${str(is_async).lower()}" rw_rate="${rw_rate}">
       <properties>
-        <async scheduling_policy="${scheduling_policy}" print_warnings="true" thread_priority="30"/>
+        <!-- This thread does the KORD read/write, i.e. the one command per 4 ms
+             tick the controller counts. At 30 it sat below the controller
+             manager's own 50 and lost scheduling contests, and every missed
+             cycle is a command the CBun counts as lost. Kassow's real-time
+             loop guidance recommends RT priority 80 for the control loop
+             (their benchmark client runs at 99, pinned). -->
+        <async scheduling_policy="${scheduling_policy}" print_warnings="true" thread_priority="${thread_priority}"/>
       </properties>
       <hardware>
         <xacro:if value="${use_mock_hardware}">
@@ -26,6 +40,13 @@
           <param name="port">${port}</param>
           <param name="session_id">${session_id}</param>
           <param name="waitSync_timeout_ms">${waitSync_timeout_ms}</param>
+          <!-- End-of-arm tool load (KORD LOAD1), sent on activation; empty = leave the
+               controller's own LOAD1. CoG / inertia: comma-separated, tool flange frame. -->
+          <xacro:if value="${str(load1_mass) != ''}">
+            <param name="load1_mass">${load1_mass}</param>
+            <param name="load1_cog">${load1_cog}</param>
+            <param name="load1_inertia">${load1_inertia}</param>
+          </xacro:if>
         </xacro:unless>
       </hardware>
 
@@ -37,6 +58,11 @@
         <state_interface name="velocity"/>
         <state_interface name="acceleration"/>
         <state_interface name="effort"/>
+        <state_interface name="model_effort"/>
+        <state_interface name="effort_limit"/>
+        <state_interface name="sensed_position"/>
+        <state_interface name="sensed_velocity"/>
+        <state_interface name="sensed_acceleration"/>
       </joint>
 
       <joint name="${prefix}_joint_2">
@@ -47,6 +73,11 @@
         <state_interface name="velocity"/>
         <state_interface name="acceleration"/>
         <state_interface name="effort"/>
+        <state_interface name="model_effort"/>
+        <state_interface name="effort_limit"/>
+        <state_interface name="sensed_position"/>
+        <state_interface name="sensed_velocity"/>
+        <state_interface name="sensed_acceleration"/>
       </joint>
 
       <joint name="${prefix}_joint_3">
@@ -57,6 +88,11 @@
         <state_interface name="velocity"/>
         <state_interface name="acceleration"/>
         <state_interface name="effort"/>
+        <state_interface name="model_effort"/>
+        <state_interface name="effort_limit"/>
+        <state_interface name="sensed_position"/>
+        <state_interface name="sensed_velocity"/>
+        <state_interface name="sensed_acceleration"/>
       </joint>
 
       <joint name="${prefix}_joint_4">
@@ -67,6 +103,11 @@
         <state_interface name="velocity"/>
         <state_interface name="acceleration"/>
         <state_interface name="effort"/>
+        <state_interface name="model_effort"/>
+        <state_interface name="effort_limit"/>
+        <state_interface name="sensed_position"/>
+        <state_interface name="sensed_velocity"/>
+        <state_interface name="sensed_acceleration"/>
       </joint>
 
       <joint name="${prefix}_joint_5">
@@ -77,6 +118,11 @@
         <state_interface name="velocity"/>
         <state_interface name="acceleration"/>
         <state_interface name="effort"/>
+        <state_interface name="model_effort"/>
+        <state_interface name="effort_limit"/>
+        <state_interface name="sensed_position"/>
+        <state_interface name="sensed_velocity"/>
+        <state_interface name="sensed_acceleration"/>
       </joint>
 
       <joint name="${prefix}_joint_6">
@@ -87,6 +133,11 @@
         <state_interface name="velocity"/>
         <state_interface name="acceleration"/>
         <state_interface name="effort"/>
+        <state_interface name="model_effort"/>
+        <state_interface name="effort_limit"/>
+        <state_interface name="sensed_position"/>
+        <state_interface name="sensed_velocity"/>
+        <state_interface name="sensed_acceleration"/>
       </joint>
 
       <joint name="${prefix}_joint_7">
@@ -97,6 +148,11 @@
         <state_interface name="velocity"/>
         <state_interface name="acceleration"/>
         <state_interface name="effort"/>
+        <state_interface name="model_effort"/>
+        <state_interface name="effort_limit"/>
+        <state_interface name="sensed_position"/>
+        <state_interface name="sensed_velocity"/>
+        <state_interface name="sensed_acceleration"/>
       </joint>
 
     </ros2_control>
