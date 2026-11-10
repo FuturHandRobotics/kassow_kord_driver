@@ -26,6 +26,8 @@
 
   <!-- Convert arg -> xacro property so it can be used inside ${...} -->
   <xacro:property name="hand_type" value="$(arg hand_type)"/>
+  <!-- The description file name uses $(arg robot_serial_number) directly: a property
+       would evaluate "02" to 2 and look for kr810_description_patched_2. -->
   <xacro:property name="robot_serial_number" value="$(arg robot_serial_number)"/>
   <xacro:property name="nominal" value="$(arg nominal)"/>
 
@@ -38,7 +40,7 @@
   </xacro:if>
 
   <xacro:if value="${not nominal}">
-    <xacro:include filename="$(find kassow_kord_description)/kr810/urdf/kr810_description_patched_${robot_serial_number}.urdf.xacro"/>
+    <xacro:include filename="$(find kassow_kord_description)/kr810/urdf/kr810_description_patched_$(arg robot_serial_number).urdf.xacro"/>
   </xacro:if>
 
   <xacro:include filename="$(find kassow_kord_bringup)/urdf/kassow_kord.ros2_control.xacro"/>
